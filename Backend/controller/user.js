@@ -2,6 +2,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const asyncHandler = require("express-async-handler");
 const User = require("../model/User");
+require('dotenv').config();
 
 const userCtrl = {
   //!Register
@@ -25,11 +26,12 @@ const userCtrl = {
     const userCreated = await User.create({
       password: hashedPassword,
       email,
+      username: email
     });
     //!Send the response
     console.log("userCreated", userCreated);
     res.json({
-      username: userCreated.username,
+      username: userCreated.email,
       email: userCreated.email,
       id: userCreated.id,
     });
@@ -49,7 +51,7 @@ const userCtrl = {
       throw new Error("Invalid credentials");
     }
     //! Generate the token
-    const token = jwt.sign({ id: user._id }, "anyKey", { expiresIn: "30d" });
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "30d" });
     //!Send the response
     res.json({
       message: "Login success",
