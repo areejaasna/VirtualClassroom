@@ -4,7 +4,10 @@ require('dotenv').config();
 const isAuthenticated = async (req, res, next) => {
   //! Get the token from the header
   const headerObj = req.headers;
-  const token = headerObj.authorization.split(" ")[1];
+  const token = headerObj.authorization ? headerObj.authorization.split(" ")[1] : null;
+  if (!token) {
+      return res.status(401).json({ message: "Authorization token is missing or invalid." });
+  }
 
   //Verify token
   const verifyToken = jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {

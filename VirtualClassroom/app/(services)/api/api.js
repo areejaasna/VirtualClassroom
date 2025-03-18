@@ -3,7 +3,7 @@ import axios from "axios";
 export const registerUser = async (user) => {
   console.log(user);
   const response = await axios.post(
-    "http://192.168.0.104:8000/api/users/register",
+    "http://192.168.0.100:8000/api/users/register",
     user,
     {
       headers: {
@@ -15,7 +15,7 @@ export const registerUser = async (user) => {
 };
 export const loginUser = async (user) => {
   const response = await axios.post(
-    "http://192.168.0.104:8000/api/users/login",
+    "http://192.168.0.100:8000/api/users/login",
     user,
     {
       headers: {

@@ -39,7 +39,6 @@ export default function Login() {
     <View style={styles.container}>
       <Text style={styles.title}>Login</Text>
       <Formik
-        initialValues={{ email: "atom@gmail.com", password: "123456" }}
         validationSchema={LoginSchema}
         onSubmit={(values) => {
           console.log(values);
