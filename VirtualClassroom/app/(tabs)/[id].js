@@ -4,11 +4,12 @@ import { useRouter } from "expo-router";
 import { useSelector } from "react-redux";
 import axios from "axios";
 import io from "socket.io-client";
+import Constants from 'expo-constants'; // Expo Constants module
 
-// Connect to your Socket.io server
-const socket = io("http://192.168.0.100:8000");
 
 export default function Room() {
+  const socket = io(`${BACKEND_API}`);
+  const { BACKEND_API } = Constants.expoConfig.extra;
   const router = useRouter();
   const roomId = useSelector((state) => state.room.roomId); // Fetch roomId from Redux
   const [roomDetails, setRoomDetails] = useState(null);
@@ -29,7 +30,7 @@ export default function Room() {
     const fetchRoomDetails = async () => {
       try {
         // Fetch room details from the backend using Axios
-        const response = await axios.get(`http://192.168.0.100:8000/api/conference/rooms/${roomId}`, {
+        const response = await axios.get(`${BACKEND_API}api/conference/rooms/${roomId}`, {
           headers: {
             Authorization: `Bearer ${user.token}`, // Send the auth token in the header
           },
@@ -67,7 +68,7 @@ export default function Room() {
     try {
       // Join room API call
       await axios.post(
-        `http://192.168.0.100:8000/api/conference/join/${roomId}`,
+        `${BACKEND_API}api/conference/join/${roomId}`,
         { userId: user.id },
         {
           headers: {

@@ -6,8 +6,10 @@ import { logoutAction } from "../(redux)/authSlice";
 import { setRoomId } from "../(redux)/roomSlice"; // Import setRoomId action
 import ProtectedRoute from "../../components/ProtectedRoute";
 import axios from "axios"; // Import axios
+import Constants from 'expo-constants'; // Expo Constants module
 
 export default function Home() {
+  const { BACKEND_API } = Constants.expoConfig.extra;
   const router = useRouter();
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
@@ -19,7 +21,7 @@ export default function Home() {
     if (user && user.token) {
       // Fetch open video conference rooms from backend
       axios
-        .get("http://192.168.0.100:8000/api/conference/rooms", {
+        .get(`${BACKEND_API}api/conference/rooms`, {
           headers: {
             Authorization: `Bearer ${user.token}`,
           },
@@ -53,7 +55,7 @@ export default function Home() {
 
     try {
       const response = await axios.post(
-        "http://192.168.0.100:8000/api/conference/create",
+        `${BACKEND_API}api/conference/create`,
         {
           title,
           host: user.id, // Send title and user ID

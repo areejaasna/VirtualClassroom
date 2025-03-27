@@ -47,7 +47,7 @@ export default function Register() {
         </Text>
       ) : null}
       <Formik
-        
+        initialValues={{ email: '', password: '' }}
         validationSchema={RegisterSchema}
         onSubmit={(values) => {
           const data = {

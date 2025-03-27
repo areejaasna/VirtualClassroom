@@ -1,9 +1,11 @@
 import axios from "axios";
+import Constants from 'expo-constants'; // Expo Constants module
 
 export const registerUser = async (user) => {
+  const { BACKEND_API } = Constants.expoConfig.extra;
   console.log(user);
   const response = await axios.post(
-    "http://192.168.0.100:8000/api/users/register",
+    `${BACKEND_API}api/users/register`,
     user,
     {
       headers: {
@@ -14,8 +16,9 @@ export const registerUser = async (user) => {
   return response.data;
 };
 export const loginUser = async (user) => {
+  const { BACKEND_API } = Constants.expoConfig.extra;
   const response = await axios.post(
-    "http://192.168.0.100:8000/api/users/login",
+    `${BACKEND_API}api/users/login`,
     user,
     {
       headers: {

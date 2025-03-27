@@ -1,11 +1,5 @@
 import React, { useEffect } from "react";
-import {
-  View,
-  StyleSheet,
-  TextInput,
-  Text,
-  TouchableOpacity,
-} from "react-native";
+import { View, StyleSheet, TextInput, Text, TouchableOpacity } from "react-native";
 import { Formik } from "formik";
 import * as Yup from "yup";
 import { useRouter } from "expo-router";
@@ -21,47 +15,38 @@ const LoginSchema = Yup.object().shape({
 
 export default function Login() {
   const router = useRouter();
-  //dispatch
   const dispatch = useDispatch();
   const mutation = useMutation({
     mutationFn: loginUser,
     mutationKey: ["login"],
   });
-  // console.log(mutation);
+
   const user = useSelector((state) => state.auth.user);
+
   useEffect(() => {
     if (user) {
-      router.push("/(tabs)");
+      router.replace("/(tabs)"); // Use replace to avoid going back to login
     }
-  }, []);
-  console.log("user", user);
+  }, [user]); // Trigger when 'user' updates
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Login</Text>
       <Formik
+        initialValues={{ email: "", password: "" }}
         validationSchema={LoginSchema}
-        onSubmit={(values) => {
-          console.log(values);
-          mutation
-            .mutateAsync(values)
-            .then((data) => {
-              console.log("data", data);
-              dispatch(loginAction(data));
-            })
-            .catch((err) => {
-              console.log(err);
-            });
-          router.push("/(tabs)");
+        onSubmit={async (values, { setSubmitting }) => {
+          try {
+            const data = await mutation.mutateAsync(values);
+            dispatch(loginAction(data)); // Update Redux state
+            setSubmitting(false);
+          } catch (error) {
+            console.error("Login failed:", error);
+            setSubmitting(false);
+          }
         }}
       >
-        {({
-          handleChange,
-          handleBlur,
-          handleSubmit,
-          values,
-          errors,
-          touched,
-        }) => (
+        {({ handleChange, handleBlur, handleSubmit, values, errors, touched, isSubmitting }) => (
           <View style={styles.form}>
             <TextInput
               style={styles.input}
@@ -71,9 +56,7 @@ export default function Login() {
               value={values.email}
               keyboardType="email-address"
             />
-            {errors.email && touched.email ? (
-              <Text style={styles.errorText}>{errors.email}</Text>
-            ) : null}
+            {errors.email && touched.email && <Text style={styles.errorText}>{errors.email}</Text>}
             <TextInput
               style={styles.input}
               placeholder="Password"
@@ -82,11 +65,11 @@ export default function Login() {
               value={values.password}
               secureTextEntry
             />
-            {errors.password && touched.password ? (
+            {errors.password && touched.password && (
               <Text style={styles.errorText}>{errors.password}</Text>
-            ) : null}
-            <TouchableOpacity style={styles.button} onPress={handleSubmit}>
-              <Text style={styles.buttonText}>Login</Text>
+            )}
+            <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={isSubmitting}>
+              <Text style={styles.buttonText}>{isSubmitting ? "Logging in..." : "Login"}</Text>
             </TouchableOpacity>
           </View>
         )}
