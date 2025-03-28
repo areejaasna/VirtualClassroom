@@ -83,22 +83,41 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
-        {photoUri && <Image source={{ uri: photoUri }} style={styles.photoPreview} />}
-        {prediction && renderPredictionBoxes()}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.button} onPress={toggleCameraFacing}>
-            <Text style={styles.text}>Flip Camera</Text>
-          </TouchableOpacity>
+     
+      {!photoUri && (
+        <CameraView style={styles.camera} facing={facing} ref={cameraRef}>
+            {prediction && renderPredictionBoxes()}
+            <View style={styles.buttonContainer}>
+            <TouchableOpacity style={styles.button} onPress={toggleCameraFacing}>
+                <Text style={styles.text}>Flip Camera</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity style={styles.button} onPress={captureAndPredict}>
-            <Text style={styles.text}>Capture & Predict</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.button} onPress={() => {setPhotoUri(null);setPrediction(null)}}>
+            <TouchableOpacity style={styles.button} onPress={captureAndPredict}>
+                <Text style={styles.text}>Capture & Predict</Text>
+            </TouchableOpacity>
+            </View>
+
+            
+        </CameraView>
+        )}
+
+        {/* Display captured photo when photoUri exists */}
+        {photoUri && <Image source={{ uri: photoUri }} style={styles.photoPreview} />}
+        {photoUri && (
+        <>
+            <Image source={{ uri: photoUri }} style={styles.photoPreview} />
+            <TouchableOpacity
+            style={styles.clearButton}
+            onPress={() => {
+                setPhotoUri(null);  // Clear the photo
+                setPrediction(null);  // Reset predictions
+            }}
+            >
             <Text style={styles.text}>Clear Photo</Text>
-          </TouchableOpacity>
-        </View>
-      </CameraView>
+            </TouchableOpacity>
+        </>
+        )}
+
 
       {prediction && prediction.length > 0 && (
         <View style={styles.predictionContainer}>
@@ -178,4 +197,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: 'white',
   },
+  clearButton: {
+    marginTop: 20,  // Add some space from the photo preview
+    padding: 15,
+    bottom: -330,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',  // Slightly opaque background
+    borderRadius: 10,  // Rounded corners
+    width: '50%',  // Center-aligned width
+    alignItems: 'center',  // Center-align text within the button
+    alignSelf: 'center',  // Center the button itself
+  },
+  
 });
