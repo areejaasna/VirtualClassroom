@@ -30,11 +30,10 @@ export default function App() {
     setFacing(current => (current === 'back' ? 'front' : 'back'));
   };
 
-  // Capture image and send it to the backend API for prediction
   const captureAndPredict = async () => {
     if (cameraRef.current) {
       const photo = await cameraRef.current.takePictureAsync();
-      setPhotoUri(photo.uri); // Store the captured image URI
+      setPhotoUri(photo.uri); 
       const formData = new FormData();
       formData.append('image', {
         uri: photo.uri,
@@ -50,7 +49,7 @@ export default function App() {
         });
 
         console.log(response.data);
-        setPrediction(response.data.detected_faces); // Store the detected faces and emotions
+        setPrediction(response.data.detected_faces); 
       } catch (error) {
         console.error('Error predicting:', error.response ? error.response.data : error.message);
       }
@@ -101,7 +100,6 @@ export default function App() {
         </CameraView>
         )}
 
-        {/* Display captured photo when photoUri exists */}
         {photoUri && <Image source={{ uri: photoUri }} style={styles.photoPreview} />}
         {photoUri && (
         <>
@@ -109,8 +107,8 @@ export default function App() {
             <TouchableOpacity
             style={styles.clearButton}
             onPress={() => {
-                setPhotoUri(null);  // Clear the photo
-                setPrediction(null);  // Reset predictions
+                setPhotoUri(null); 
+                setPrediction(null);  
             }}
             >
             <Text style={styles.text}>Clear Photo</Text>
@@ -198,14 +196,14 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   clearButton: {
-    marginTop: 20,  // Add some space from the photo preview
+    marginTop: 20, 
     padding: 15,
     bottom: -330,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',  // Slightly opaque background
-    borderRadius: 10,  // Rounded corners
-    width: '50%',  // Center-aligned width
-    alignItems: 'center',  // Center-align text within the button
-    alignSelf: 'center',  // Center the button itself
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 10, 
+    width: '50%', 
+    alignItems: 'center',  
+    alignSelf: 'center',  
   },
   
 });
