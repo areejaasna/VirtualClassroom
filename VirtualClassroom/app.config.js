@@ -9,6 +9,7 @@ export default {
     "scheme": "practice",
     extra: {
         BACKEND_API: process.env.BACKEND_API,
+        ML_API:process.env.ML_API,
     },
   },
 };

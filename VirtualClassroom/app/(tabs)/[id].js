@@ -15,7 +15,7 @@ export default function Room() {
   const [roomDetails, setRoomDetails] = useState(null);
   const [isJoined, setIsJoined] = useState(false);
   const user = useSelector((state) => state.auth.user); // Get user data from Redux
-
+  
   useEffect(() => {
     if (!user) {
       alert("User not found, please log in.");
