@@ -1,0 +1,6 @@
+{
+  "firebase_hosting": {
+    "deploymentHostingUrl": "https://virtual-classroom-9da20.web.app"
+  },
+  "cloud_run_deploy": {}
+}
