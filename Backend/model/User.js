@@ -1,24 +1,47 @@
 const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 
 const userSchema = new mongoose.Schema(
   {
-    firstName: { type: String, required: true }, // Added firstName
-    lastName: { type: String, required: true }, // Added lastName
-    username: { type: String, required: true },
-    email: { type: String, required: true, unique: true }, // Added unique constraint for email
-    password: { type: String, required: true },
+    username: { 
+      type: String, 
+      required: true 
+    },
+    firstName: { 
+      type: String, 
+      required: true 
+    }, 
+    lastName: { 
+      type: String, 
+      required: true 
+    }, 
+    email: { 
+      type: String, 
+      required: true, 
+      unique: true 
+    },
+    phone: {
+      type: String,
+      required: true
+    },
     role: {
       type: String,
       required: true,
-      enum: ['Student', 'Teacher', 'Admin'], // Added role with enum validation
-      default: 'Student' // Optional: set a default role
+      enum: ['Student', 'Teacher', 'Admin'], // Role validation
     },
-    college: { type: String, required: true }, // Added college
+    password: { 
+      type: String, 
+      required: true 
+    },
+    college: { 
+      type: String, 
+      required: true 
+    }, 
   },
   {
     timestamps: true,
   }
 );
 
-//Compile to form the model
+// Compile to form the model
 module.exports = mongoose.model("User", userSchema);
