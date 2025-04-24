@@ -2,118 +2,131 @@ const asyncHandler = require("express-async-handler");
 const { Server } = require("socket.io");
 const ConferenceRoom = require("../model/ConferenceRoom.js");
 const User = require("../model/User.js");
+// Consider adding Agora token generation logic if needed for production
+// const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
 
 const conferenceCtrl = {
   //! Create a Video Conference Room
   createRoom: asyncHandler(async (req, res) => {
     const { title } = req.body;
     const userId = req.body.host;
-    console.log(title, userId);
+    console.log("Creating room:", title, userId);
 
     if (!title) {
       return res.status(400).json({ error: "Title is required" });
     }
 
-    const room = await ConferenceRoom.create({
-      title,
-      host: userId,
-      participants: [userId],
-    });
-    res.status(201).json({ message: "Room created successfully", room });
+    try {
+      const room = await ConferenceRoom.create({
+        title,
+        host: userId,
+        participants: [userId], // Host initially is the only participant
+      });
+      console.log("Room created:", room._id);
+      res.status(201).json({ message: "Room created successfully", room });
+    } catch (error) {
+      console.error("Error creating room:", error);
+      res.status(500).json({ error: "Failed to create room" });
+    }
   }),
 
   //! Get all active rooms
   getRooms: asyncHandler(async (req, res) => {
-    const rooms = await ConferenceRoom.find();
-    res.status(200).json(rooms);
+    try {
+      const rooms = await ConferenceRoom.find();
+      res.status(200).json(rooms);
+    } catch (error) {
+      console.error("Error fetching rooms:", error);
+      res.status(500).json({ error: "Failed to fetch rooms" });
+    }
   }),
 
+  //! Get room details by ID
   getRoomById: asyncHandler(async (req, res) => {
     const { roomId } = req.params;
-    const room = await ConferenceRoom.findById(roomId).populate('host', 'email'); // Populate host details if needed
-    if (!room) {
-      return res.status(404).json({ error: "Room not found" });
+    try {
+      const room = await ConferenceRoom.findById(roomId).populate('host', 'email');
+      if (!room) {
+        return res.status(404).json({ error: "Room not found" });
+      }
+      res.status(200).json(room);
+    } catch (error) {
+      console.error(`Error fetching room ${roomId}:`, error);
+      res.status(500).json({ error: "Failed to fetch room details" });
     }
-    res.status(200).json(room);
   }),
 
-  //! Join a room
+  //! Join a room (updates participant list in DB - Agora handles actual channel join)
   joinRoom: asyncHandler(async (req, res) => {
     const { roomId } = req.params;
-    const userId = req.user.id; // Assuming user ID is available in req.user
+    // Assuming userId is passed in request body or available via auth middleware (req.user.id)
+    const userId = req.user?.id || req.body.userId;
 
-    const room = await ConferenceRoom.findById(roomId);
-    if (!room) {
-      return res.status(404).json({ error: "Room not found" });
+    if (!userId) {
+       return res.status(400).json({ error: "User ID is required to join" });
     }
 
-    if (!room.participants.includes(userId)) {
-      room.participants.push(userId);
-      await room.save();
-    }
+    try {
+      const room = await ConferenceRoom.findById(roomId);
+      if (!room) {
+        return res.status(404).json({ error: "Room not found" });
+      }
 
-    res.status(200).json({ message: "Joined room successfully", room });
+      // Add participant to DB list if not already present
+      if (!room.participants.includes(userId)) {
+        room.participants.push(userId);
+        await room.save();
+        console.log(`User ${userId} added to participant list for room ${roomId}`);
+      }
+
+      // Optionally generate Agora token here
+      // const appID = process.env.AGORA_APP_ID;
+      // const appCertificate = process.env.AGORA_APP_CERTIFICATE;
+      // const channelName = roomId; // Use MongoDB room ID as Agora channel name
+      // const uid = 0; // Use 0 for wildcard user ID, or assign specific user IDs
+      // const role = RtcRole.PUBLISHER;
+      // const expirationTimeInSeconds = 3600; // 1 hour
+      // const currentTimestamp = Math.floor(Date.now() / 1000);
+      // const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
+
+      // const token = RtcTokenBuilder.buildTokenWithUid(appID, appCertificate, channelName, uid, role, privilegeExpiredTs);
+      // console.log("Generated Agora Token:", token);
+
+      // Send back success message (and token if generated)
+      res.status(200).json({ 
+        message: "Joined room successfully (participant list updated)", 
+        // token: token // Include token if using token authentication
+      });
+
+    } catch (error) {
+      console.error(`Error joining room ${roomId} for user ${userId}:`, error);
+      res.status(500).json({ error: "Failed to join room" });
+    }
   }),
+
+  // TODO: Add a leaveRoom endpoint to remove user from participants array in DB
 };
 
-// Real-time Video Conference with Socket.io
+// Basic Socket.IO setup (Optional - can be removed if not needed for other features)
+// Agora handles the real-time communication for video/audio.
+// You might still use Socket.IO for chat, notifications, etc.
 const initializeSocket = (server) => {
   const io = new Server(server, { cors: { origin: "*" } });
-  const users = {}; // Keep track of users and their socket IDs per room
-  const socketToRoom = {}; // Keep track of which room a socket is in
 
   io.on("connection", (socket) => {
-    console.log("User connected", socket.id);
+    console.log("Socket.IO user connected", socket.id);
 
-    socket.on("join-room", ({ roomId, userId }) => {
+    socket.on("join-room-notify", ({ roomId, userId }) => {
+      // Example: Notify others in the room (via Socket.IO) that a user joined
+      // This is separate from Agora's channel joining.
       socket.join(roomId);
-      socketToRoom[socket.id] = roomId;
-      if (!users[roomId]) {
-        users[roomId] = [];
-      }
-      // Add user only if they are not already in the list for that room
-      if (!users[roomId].find(user => user.socketId === socket.id)) {
-        users[roomId].push({ userId: userId, socketId: socket.id });
-      }
-      console.log(`User ${userId} (${socket.id}) joined room ${roomId}`);
-
-      // Get list of all users (their socket IDs) currently in this room, excluding the new joiner
-      const usersInThisRoom = users[roomId].filter(user => user.socketId !== socket.id);
-
-      // Send the list of existing users to the new user
-      socket.emit("existing-users", usersInThisRoom.map(u => u.socketId));
-
-      // Notify existing users that a new user has joined (send new user's socket ID)
-      // Deprecated: usersInThisRoom.forEach(user => {
-      // Deprecated:   io.to(user.socketId).emit("user-joined", { signalerId: socket.id, userId: userId });
-      // Deprecated: });
-      // Emit to all *other* sockets in the room
-      socket.to(roomId).emit("user-joined", { signalerId: socket.id, userId: userId });
-
+      socket.to(roomId).emit("user-joined-notify", { userId, socketId: socket.id });
+      console.log(`Socket ${socket.id} associated with user ${userId} joined notification room ${roomId}`);
     });
-
-    // Relay signaling messages
-    socket.on("sending-signal", payload => {
-        console.log(`Relaying signal from ${socket.id} to ${payload.userToSignal}`);
-        io.to(payload.userToSignal).emit('signal-received', { signal: payload.signal, signalerId: socket.id });
-    });
-
-    socket.on("returning-signal", payload => {
-        console.log(`Relaying return signal from ${socket.id} to ${payload.callerId}`);
-        io.to(payload.callerId).emit('signal-accepted', { signal: payload.signal, id: socket.id });
-    });
-
 
     socket.on("disconnect", () => {
-      console.log("User disconnected", socket.id);
-      const roomId = socketToRoom[socket.id];
-      if (roomId && users[roomId]) {
-        // Remove user from the room's list
-        users[roomId] = users[roomId].filter(user => user.socketId !== socket.id);
-        // Notify remaining users in the room
-        io.to(roomId).emit("user-left", socket.id);
-      }
-      delete socketToRoom[socket.id]; // Clean up mapping
+      console.log("Socket.IO user disconnected", socket.id);
+      // Add cleanup logic if needed, e.g., remove user from any notification rooms
     });
   });
 };
