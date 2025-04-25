@@ -1,29 +1,31 @@
-import React, { useEffect } from "react";
-import { useDispatch } from "react-redux";
+import React, { useState, createContext, useContext, useMemo } from 'react';
+import { useColorScheme } from 'react-native';
+import { lightTheme, darkTheme } from '../constants/themes';
+import RootLayoutNav from '../app/_layout'; // Assuming RootLayoutNav is what you want to wrap
+import { Slot } from 'expo-router';
 
-import { Stack } from "expo-router/stack";
-import { loadUser } from "./authSlice";
+const ThemeContext = createContext();
 
-function AppWrapper() {
-  const dispatch = useDispatch();
+export const useTheme = () => useContext(ThemeContext);
 
-  useEffect(() => {
-    dispatch(loadUser());
-  }, [dispatch]);
+const AppWrapper = () => {
+  const colorScheme = useColorScheme(); // Detects OS theme preference
+  const [isDarkMode, setIsDarkMode] = useState(colorScheme === 'dark');
 
+  const theme = useMemo(() => (isDarkMode ? darkTheme : lightTheme), [isDarkMode]);
+
+  const toggleTheme = () => {
+    setIsDarkMode(!isDarkMode);
+  };
+
+  // Provide the theme and the toggle function through context
   return (
-    <Stack>
-      <Stack.Screen
-        name="index"
-        options={{ title: "Home", headerShown: false }}
-      />
-      
-      <Stack.Screen name="profile" options={{ title: "Profile", headerShown: false }} />
-      <Stack.Screen name="auth/login" options={{ title: "Login", headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ title: "Virtual Classroom", headerShown: false }} />
-      <Stack.Screen name="auth/register" options={{ title: "register", headerShown: false }} />
-    </Stack>
+    <ThemeContext.Provider value={{ theme, isDarkMode, toggleTheme }}>
+      {/* Render the actual app layout/navigation */} 
+      {/* <RootLayoutNav />  Replace with Slot if this is the intended way to wrap the layout */}
+      <Slot />
+    </ThemeContext.Provider>
   );
-}
+};
 
 export default AppWrapper;
