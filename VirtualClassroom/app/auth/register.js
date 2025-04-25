@@ -6,102 +6,189 @@ import {
   Text,
   TouchableOpacity,
   ActivityIndicator,
-  ScrollView, // Import ScrollView
-  KeyboardAvoidingView,
-  Platform,
+  ScrollView, // Use ScrollView for longer forms
+  Platform, // For platform-specific styling if needed
 } from "react-native";
+import { Picker } from '@react-native-picker/picker'; // Import Picker
 import { Formik } from "formik";
 import * as Yup from "yup";
 import { useRouter } from "expo-router";
 import { useMutation } from "@tanstack/react-query";
-import { registerUser } from "../(services)/api/api";
+import { registerUser } from "../(services)/api/api"; // Assuming this function sends the data object as is
 
-// Expanded validation schema
+// Define roles
+const ROLES = ['Student', 'Teacher', 'Admin'];
+
+// --- Validation Schema ---
 const RegisterSchema = Yup.object().shape({
+  role: Yup.string().oneOf(ROLES).required("Role is required"),
   username: Yup.string().required("Username is required"),
-  firstName: Yup.string().required("First name is required"),
-  lastName: Yup.string().required("Last name is required"),
   email: Yup.string().email("Invalid email").required("Email is required"),
-  phone: Yup.string().required("Phone number is required"), // Basic validation, consider adding regex for format
-  role: Yup.string()
-    .required("Role is required")
-    .oneOf(['Student', 'Teacher', 'Admin'], 'Role must be Student, Teacher, or Admin'),
-  password: Yup.string().min(6, "Password too short!").required("Password is required"),
+  password: Yup.string().min(6, "Password must be at least 6 characters").required("Password is required"),
   confirmPassword: Yup.string()
     .oneOf([Yup.ref("password"), null], "Passwords must match")
     .required("Confirm Password is required"),
-  college: Yup.string().required("College is required"),
+
+  // --- Conditional Fields ---
+  firstName: Yup.string().when('role', {
+    is: (role) => role === 'Student' || role === 'Teacher',
+    then: (schema) => schema.required('First Name is required'),
+    otherwise: (schema) => schema.optional(),
+  }),
+  lastName: Yup.string().when('role', {
+    is: (role) => role === 'Student' || role === 'Teacher',
+    then: (schema) => schema.required('Last Name is required'),
+    otherwise: (schema) => schema.optional(),
+  }),
+   phoneNumber: Yup.string().when('role', {
+    is: (role) => role === 'Student' || role === 'Teacher',
+    then: (schema) => schema.required('Phone Number is required'), // Add more specific validation (e.g., regex) if needed
+    otherwise: (schema) => schema.optional(),
+  }),
+  collegeOrUniversity: Yup.string().when('role', {
+     is: (role) => role === 'Student' || role === 'Teacher',
+    then: (schema) => schema.required('College/University is required'),
+    otherwise: (schema) => schema.optional(),
+  }),
+  department: Yup.string().when('role', {
+    is: 'Teacher',
+    then: (schema) => schema.required('Department is required'),
+    otherwise: (schema) => schema.optional(),
+  }),
+  designation: Yup.string().when('role', {
+    is: 'Teacher',
+    then: (schema) => schema.required('Designation is required'),
+    otherwise: (schema) => schema.optional(),
+  }),
+  fullName: Yup.string().when('role', {
+    is: 'Admin',
+    then: (schema) => schema.required('Full Name is required'),
+    otherwise: (schema) => schema.optional(),
+  }),
 });
 
 export default function Register() {
   const router = useRouter();
+  // No need for separate message state, mutation object has status flags
+  // const [message, setMessage] = useState("");
+  // const [messageType, setMessageType] = useState("");
 
   const mutation = useMutation({
     mutationFn: registerUser,
     mutationKey: ["register"],
+    onSuccess: () => {
+      // Handle successful registration (e.g., show success message, navigate)
+      // setMessage("Registration successful!"); // Can use mutation.isSuccess flag directly
+      // setMessageType("success");
+      alert("Registration successful!"); // Simple alert for now
+      // Consider navigating to login or a confirmation page instead of tabs directly
+      router.push("/auth/login");
+      // setTimeout(() => {
+      //   // setMessage("");
+      //   // router.push("/(tabs)"); // Needs update for role-based home pages later
+      //   router.push("/auth/login");
+      // }, 1500);
+    },
+    onError: (error) => {
+      // Handle error (e.g., show error message)
+      // setMessage(error?.response?.data?.message || "Registration failed");
+      // setMessageType("error");
+      // Error message is displayed below using mutation.error
+    }
   });
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.keyboardAvoidingView}
-    >
-      <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <View style={styles.container}>
         <Text style={styles.title}>Register</Text>
-        {mutation?.isError ? (
+
+        {/* Display Server Error Message */}
+        {mutation?.isError && (
           <Text style={styles.errorText}>
-            {mutation?.error?.response?.data?.message || mutation?.error?.message}
+            {mutation.error?.response?.data?.message || mutation.error?.message || "An error occurred"}
           </Text>
-        ) : null}
-        {mutation?.isSuccess ? (
-          <Text style={styles.successText}>Registration successful! Redirecting...</Text>
-        ) : null}
+        )}
+
+         {/* Display Success Message (Optional, often handled by navigation) */}
+         {/* {mutation?.isSuccess && (
+           <Text style={styles.successText}>Registration successful!</Text>
+         )} */}
+
         <Formik
-          // Expanded initial values
           initialValues={{
-            username: "",
-            firstName: "",
-            lastName: "",
-            email: "",
-            phone: "",
-            role: "", // Default to empty, or set 'Student'
-            password: "",
-            confirmPassword: "",
-            college: "",
+            role: ROLES[0], // Default to Student
+            username: '',
+            email: '',
+            password: '',
+            confirmPassword: '',
+            firstName: '',
+            lastName: '',
+            phoneNumber: '',
+            collegeOrUniversity: '',
+            department: '',
+            designation: '',
+            fullName: '',
           }}
           validationSchema={RegisterSchema}
-          onSubmit={(values, { setSubmitting }) => {
-            // Prepare data object with all fields except confirmPassword
-            const { confirmPassword, ...dataToSend } = values;
-            console.log("Submitting registration data:", dataToSend);
-            mutation
-              .mutateAsync(dataToSend)
-              .then(() => {
-                // Success: Navigate after a short delay
-                setTimeout(() => {
-                  router.push("/(tabs)"); // Or login screen router.push("/auth/login");
-                }, 1500);
-              })
-              .catch((error) => {
-                // Error message is handled by the isError check above
-                console.error("Registration failed:", error.response?.data || error.message);
-              })
-              .finally(() => {
-                 setSubmitting(false);
-              });
+          onSubmit={(values) => {
+            // Construct data based on role, only include relevant fields
+            const dataToSend = {
+              role: values.role,
+              username: values.username,
+              email: values.email,
+              password: values.password, // Backend controller expects the raw password
+            };
+
+            if (values.role === 'Student' || values.role === 'Teacher') {
+              dataToSend.firstName = values.firstName;
+              dataToSend.lastName = values.lastName;
+              dataToSend.phoneNumber = values.phoneNumber;
+              dataToSend.collegeOrUniversity = values.collegeOrUniversity;
+            }
+            if (values.role === 'Teacher') {
+              dataToSend.department = values.department;
+              dataToSend.designation = values.designation;
+            }
+            if (values.role === 'Admin') {
+              dataToSend.fullName = values.fullName;
+            }
+            console.log("Submitting data:", dataToSend); // For debugging
+            mutation.mutate(dataToSend); // Use mutate, not mutateAsync unless specific async handling is needed here
           }}
         >
           {({
             handleChange,
             handleBlur,
             handleSubmit,
+            setFieldValue, // Needed to update role from Picker
             values,
             errors,
             touched,
-            isSubmitting // Get isSubmitting from Formik
           }) => (
             <View style={styles.form}>
-              {/* Username Input */}
+
+              {/* Role Selector */}
+              <Text style={styles.label}>Select Role:</Text>
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={values.role}
+                  style={styles.picker}
+                  onValueChange={(itemValue) =>
+                    setFieldValue('role', itemValue) // Update Formik state
+                  }
+                  itemStyle={styles.pickerItem} // Style individual items if needed
+                >
+                  {ROLES.map((role) => (
+                    <Picker.Item key={role} label={role} value={role} />
+                  ))}
+                </Picker>
+              </View>
+               {errors.role && touched.role ? (
+                 <Text style={styles.errorText}>{errors.role}</Text>
+               ) : null}
+
+
+              {/* --- Common Fields --- */}
               <TextInput
                 style={styles.input}
                 placeholder="Username"
@@ -113,31 +200,6 @@ export default function Register() {
                 <Text style={styles.errorText}>{errors.username}</Text>
               ) : null}
 
-              {/* First Name Input */}
-              <TextInput
-                style={styles.input}
-                placeholder="First Name"
-                onChangeText={handleChange("firstName")}
-                onBlur={handleBlur("firstName")}
-                value={values.firstName}
-              />
-              {errors.firstName && touched.firstName ? (
-                <Text style={styles.errorText}>{errors.firstName}</Text>
-              ) : null}
-
-              {/* Last Name Input */}
-              <TextInput
-                style={styles.input}
-                placeholder="Last Name"
-                onChangeText={handleChange("lastName")}
-                onBlur={handleBlur("lastName")}
-                value={values.lastName}
-              />
-              {errors.lastName && touched.lastName ? (
-                <Text style={styles.errorText}>{errors.lastName}</Text>
-              ) : null}
-
-              {/* Email Input */}
               <TextInput
                 style={styles.input}
                 placeholder="Email"
@@ -151,45 +213,6 @@ export default function Register() {
                 <Text style={styles.errorText}>{errors.email}</Text>
               ) : null}
 
-              {/* Phone Input */}
-              <TextInput
-                style={styles.input}
-                placeholder="Phone Number"
-                onChangeText={handleChange("phone")}
-                onBlur={handleBlur("phone")}
-                value={values.phone}
-                keyboardType="phone-pad"
-              />
-              {errors.phone && touched.phone ? (
-                <Text style={styles.errorText}>{errors.phone}</Text>
-              ) : null}
-
-              {/* Role Input (Consider replacing with Picker) */}
-              <TextInput
-                style={styles.input}
-                placeholder="Role (Student, Teacher, Admin)"
-                onChangeText={handleChange("role")}
-                onBlur={handleBlur("role")}
-                value={values.role}
-                autoCapitalize="words"
-              />
-              {errors.role && touched.role ? (
-                <Text style={styles.errorText}>{errors.role}</Text>
-              ) : null}
-
-              {/* College Input */}
-              <TextInput
-                style={styles.input}
-                placeholder="College"
-                onChangeText={handleChange("college")}
-                onBlur={handleBlur("college")}
-                value={values.college}
-              />
-              {errors.college && touched.college ? (
-                <Text style={styles.errorText}>{errors.college}</Text>
-              ) : null}
-
-              {/* Password Input */}
               <TextInput
                 style={styles.input}
                 placeholder="Password"
@@ -202,7 +225,6 @@ export default function Register() {
                 <Text style={styles.errorText}>{errors.password}</Text>
               ) : null}
 
-              {/* Confirm Password Input */}
               <TextInput
                 style={styles.input}
                 placeholder="Confirm Password"
@@ -215,32 +237,135 @@ export default function Register() {
                 <Text style={styles.errorText}>{errors.confirmPassword}</Text>
               ) : null}
 
+              {/* --- Conditional Fields --- */}
+
+              {/* Student & Teacher Fields */}
+              {(values.role === 'Student' || values.role === 'Teacher') && (
+                <>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="First Name"
+                    onChangeText={handleChange("firstName")}
+                    onBlur={handleBlur("firstName")}
+                    value={values.firstName}
+                  />
+                  {errors.firstName && touched.firstName ? (
+                    <Text style={styles.errorText}>{errors.firstName}</Text>
+                  ) : null}
+
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Last Name"
+                    onChangeText={handleChange("lastName")}
+                    onBlur={handleBlur("lastName")}
+                    value={values.lastName}
+                  />
+                  {errors.lastName && touched.lastName ? (
+                    <Text style={styles.errorText}>{errors.lastName}</Text>
+                  ) : null}
+
+                   <TextInput
+                    style={styles.input}
+                    placeholder="Phone Number"
+                    onChangeText={handleChange("phoneNumber")}
+                    onBlur={handleBlur("phoneNumber")}
+                    value={values.phoneNumber}
+                    keyboardType="phone-pad"
+                  />
+                  {errors.phoneNumber && touched.phoneNumber ? (
+                    <Text style={styles.errorText}>{errors.phoneNumber}</Text>
+                  ) : null}
+
+                   <TextInput
+                    style={styles.input}
+                    placeholder="College/University"
+                    onChangeText={handleChange("collegeOrUniversity")}
+                    onBlur={handleBlur("collegeOrUniversity")}
+                    value={values.collegeOrUniversity}
+                  />
+                  {errors.collegeOrUniversity && touched.collegeOrUniversity ? (
+                    <Text style={styles.errorText}>{errors.collegeOrUniversity}</Text>
+                  ) : null}
+                </>
+              )}
+
+              {/* Teacher Specific Fields */}
+              {values.role === 'Teacher' && (
+                <>
+                   <TextInput
+                    style={styles.input}
+                    placeholder="Department"
+                    onChangeText={handleChange("department")}
+                    onBlur={handleBlur("department")}
+                    value={values.department}
+                  />
+                  {errors.department && touched.department ? (
+                    <Text style={styles.errorText}>{errors.department}</Text>
+                  ) : null}
+
+                   <TextInput
+                    style={styles.input}
+                    placeholder="Designation"
+                    onChangeText={handleChange("designation")}
+                    onBlur={handleBlur("designation")}
+                    value={values.designation}
+                  />
+                  {errors.designation && touched.designation ? (
+                    <Text style={styles.errorText}>{errors.designation}</Text>
+                  ) : null}
+                </>
+              )}
+
+              {/* Admin Specific Fields */}
+              {values.role === 'Admin' && (
+                <>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Full Name"
+                    onChangeText={handleChange("fullName")}
+                    onBlur={handleBlur("fullName")}
+                    value={values.fullName}
+                  />
+                  {errors.fullName && touched.fullName ? (
+                    <Text style={styles.errorText}>{errors.fullName}</Text>
+                  ) : null}
+                </>
+              )}
+
               {/* Submit Button */}
               <TouchableOpacity
-                style={[styles.button, (isSubmitting || mutation.isPending) && styles.buttonDisabled]} // Style updates for disabled state
+                style={[styles.button, mutation.isPending && styles.buttonDisabled]} // Add disabled style
                 onPress={handleSubmit}
-                disabled={isSubmitting || mutation.isPending} // Disable button
+                disabled={mutation.isPending} // Disable button while submitting
               >
-                {isSubmitting || mutation.isPending ? (
+                {mutation.isPending ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <Text style={styles.buttonText}>Register</Text>
                 )}
               </TouchableOpacity>
+
+               {/* Link to Login */}
+              <TouchableOpacity onPress={() => router.push('/auth/login')} style={styles.linkButton}>
+                <Text style={styles.linkText}>Already have an account? Login</Text>
+              </TouchableOpacity>
+
             </View>
           )}
         </Formik>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </View>
+    </ScrollView>
   );
 }
 
+// --- Styles ---
 const styles = StyleSheet.create({
-  keyboardAvoidingView: {
-    flex: 1,
+  scrollContainer: {
+    flexGrow: 1, // Ensures content can scroll if it overflows
+    justifyContent: 'center',
   },
   container: {
-    flexGrow: 1, // Changed from flex: 1 to allow scrolling
+    flex: 1, // Takes available space within ScrollView
     justifyContent: "center",
     alignItems: "center",
     padding: 20, // Increased padding
@@ -249,33 +374,58 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28, // Slightly smaller title
     fontWeight: "bold",
-    marginBottom: 20,
+    marginBottom: 20, // Adjusted margin
     color: '#333',
   },
   form: {
     width: "100%",
-    maxWidth: 400, // Added maxWidth for better layout on larger screens
   },
-  input: {
-    height: 48,
+   label: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 5,
+    color: '#555',
+  },
+  pickerContainer: {
+    height: 50,
     borderColor: "#ccc",
     borderWidth: 1,
     borderRadius: 8,
-    paddingHorizontal: 15,
-    marginBottom: 12, // Adjusted margin
+    marginBottom: 16,
+    backgroundColor: "#fff",
+    justifyContent: 'center', // Center picker content vertically
+  },
+  picker: {
+    height: 50,
+    width: '100%',
+    // Note: Direct styling of Picker itself is limited, especially on Android.
+    // The container handles border, background etc.
+  },
+   pickerItem: {
+     // Styling for individual Picker items (mostly iOS)
+     // height: 50, // Might affect layout
+   },
+  input: {
+    height: 50,
+    borderColor: "#ccc",
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    marginBottom: 12, // Slightly reduced margin
     backgroundColor: "#fff",
     fontSize: 16,
   },
   errorText: {
     color: "red",
-    marginBottom: 10, // Adjusted margin
-    fontSize: 12,
-    marginLeft: 5, // Indent error messages slightly
+    // marginBottom: 10, // Adjust margin for errors
+    alignSelf: 'flex-start', // Align error to the left
+    marginLeft: 5, // Indent slightly
+    marginBottom: 8, // Space below error
+    fontSize: 13,
   },
-  successText: {
+  successText: { // Keep if needed for direct message display
     color: "green",
     marginBottom: 16,
-    fontSize: 14,
     textAlign: 'center',
   },
   button: {
@@ -285,18 +435,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 8,
     marginTop: 10, // Adjusted margin
-    elevation: 2, // Added subtle shadow for Android
-    shadowColor: '#000',
+    elevation: 2, // Add shadow for Android
+    shadowColor: '#000', // Add shadow for iOS
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
-    shadowRadius: 1.41,
+    shadowRadius: 1,
   },
-  buttonDisabled: {
-    backgroundColor: "#ccc", // Style for disabled button
-  },
+   buttonDisabled: {
+     backgroundColor: '#b39ddb', // Lighter purple when disabled
+   },
   buttonText: {
     color: "#fff",
     fontSize: 18,
     fontWeight: "bold",
+  },
+    linkButton: {
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  linkText: {
+    color: '#6200ea',
+    fontSize: 15,
+    textDecorationLine: 'underline',
   },
 });

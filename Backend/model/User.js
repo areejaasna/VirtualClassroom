@@ -1,47 +1,53 @@
 const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs");
+const Schema = mongoose.Schema;
 
-const userSchema = new mongoose.Schema(
-  {
-    username: { 
-      type: String, 
-      required: true 
-    },
-    firstName: { 
-      type: String, 
-      required: true 
-    }, 
-    lastName: { 
-      type: String, 
-      required: true 
-    }, 
-    email: { 
-      type: String, 
-      required: true, 
-      unique: true 
-    },
-    phone: {
-      type: String,
-      required: true
-    },
-    role: {
-      type: String,
-      required: true,
-      enum: ['Student', 'Teacher', 'Admin'], // Role validation
-    },
-    password: { 
-      type: String, 
-      required: true 
-    },
-    college: { 
-      type: String, 
-      required: true 
-    }, 
-  },
-  {
-    timestamps: true,
-  }
-);
+// Base User Schema Options
+const baseOptions = {
+  timestamps: true,
+  discriminatorKey: 'role', // Important for discriminators
+  collection: 'users', // Explicitly set the collection name
+};
 
-// Compile to form the model
-module.exports = mongoose.model("User", userSchema);
+// Base User Schema Definition
+const baseUserSchema = new Schema({
+  username: { type: String, required: true, unique: true, index: true },
+  email: { type: String, required: true, unique: true, index: true },
+  password: { type: String, required: true },
+  phoneNumber: { type: String, required: true }, // Common field
+  role: { type: String, required: true, enum: ['Student', 'Teacher', 'Admin'], index: true },
+}, baseOptions);
+
+// Base User Model
+const User = mongoose.model("User", baseUserSchema);
+
+// --- Discriminator Schemas ---
+
+// Student Schema
+const Student = User.discriminator('Student', new Schema({
+  firstName: { type: String, required: true },
+  lastName: { type: String, required: true },
+  university: { type: String, required: true },
+  department: { type: String, required: true },
+}));
+
+// Teacher Schema
+const Teacher = User.discriminator('Teacher', new Schema({
+  firstName: { type: String, required: true },
+  lastName: { type: String, required: true },
+  university: { type: String, required: true },
+  department: { type: String, required: true },
+  designation: { type: String, required: true },
+}));
+
+// Admin Schema
+const Admin = User.discriminator('Admin', new Schema({
+  fullName: { type: String, required: true },
+}));
+
+// Export the base model and discriminators (optional, but can be useful)
+module.exports = {
+  User,
+  Student,
+  Teacher,
+  Admin,
+};

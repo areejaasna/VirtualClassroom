@@ -8,8 +8,8 @@ import Constants from 'expo-constants'; // Expo Constants module
 
 
 export default function Room() {
-  const socket = io(`${BACKEND_API}`);
   const { BACKEND_API } = Constants.expoConfig.extra;
+  const socket = io(`${BACKEND_API}`);
   const router = useRouter();
   const roomId = useSelector((state) => state.room.roomId); // Fetch roomId from Redux
   const [roomDetails, setRoomDetails] = useState(null);
