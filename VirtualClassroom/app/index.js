@@ -6,13 +6,14 @@ import {
   TouchableOpacity,
   Switch,
   StatusBar,
+  ScrollView, // Added ScrollView for potential content overflow
 } from "react-native";
-import { Video, ResizeMode } from "expo-av";
+// Removed Video import
 import { useRouter } from "expo-router";
 import { useTheme } from "./(redux)/AppWrapper"; // Import the theme hook
 
 export default function App() {
-  const video = React.useRef(null);
+  // Removed video ref
   const router = useRouter();
   const { theme, isDarkMode, toggleTheme } = useTheme(); // Use the theme context
 
@@ -23,53 +24,72 @@ export default function App() {
       justifyContent: "center",
       backgroundColor: theme.background, // Apply background color from theme
     },
-    video: {
-      ...StyleSheet.absoluteFillObject,
-    },
+    // Removed video style
     overlay: {
-      ...StyleSheet.absoluteFillObject,
+      flex: 1, // Changed to flex: 1 to take up space
       justifyContent: "center",
       alignItems: "center",
+      padding: 20, // Added padding
       backgroundColor: theme.overlay, // Apply overlay color from theme
     },
     mainText: {
-      color: theme.textPrimary, // Apply text color from theme
-      fontSize: 68,
+      color: theme.textPrimary,
+      fontSize: 48, // Adjusted size
       fontWeight: "bold",
       textAlign: "center",
+      marginBottom: 10,
     },
     subText: {
-      color: theme.textPrimary, // Apply text color from theme
-      fontSize: 24,
+      color: theme.textPrimary,
+      fontSize: 20, // Adjusted size
       fontWeight: "bold",
       textAlign: "center",
     },
     tagline: {
-      color: theme.textSecondary, // Apply text color from theme
-      fontSize: 18,
+      color: theme.textSecondary,
+      fontSize: 16, // Adjusted size
       fontStyle: "italic",
       textAlign: "center",
-      marginTop: 10,
+      marginTop: 5,
+      marginBottom: 30, // Added margin bottom
+    },
+    infographicContainer: {
+      width: '100%',
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    infographicPlaceholder: {
+      backgroundColor: theme.secondary, // Use a theme color for placeholder background
+      padding: 15,
+      borderRadius: 10,
+      marginVertical: 10,
+      width: '90%',
+      alignItems: 'center',
+    },
+    infographicText: {
+      color: theme.textPrimary,
+      fontSize: 14,
+      textAlign: 'center',
     },
     buttons: {
       flexDirection: "row",
       justifyContent: "space-around",
       alignItems: "center",
-      position: "absolute",
-      bottom: 50, // Adjusted position slightly
-      left: 0,
-      right: 0,
+      width: '100%', // Make buttons take full width
       paddingHorizontal: 20,
+      marginTop: 20, // Added margin top
     },
     button: {
-      backgroundColor: theme.button, // Apply button color from theme
+      backgroundColor: theme.button,
       paddingVertical: 12,
       paddingHorizontal: 20,
       borderRadius: 25,
       elevation: 3,
+      minWidth: 120, // Ensure buttons have some minimum width
+      alignItems: 'center',
     },
     buttonText: {
-      color: theme.buttonText, // Apply button text color from theme
+      color: theme.buttonText,
       fontSize: 18,
       fontWeight: "bold",
     },
@@ -93,18 +113,8 @@ export default function App() {
     <View style={styles.container}>
       {/* Set status bar style based on theme */}
       <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
-      <Video
-        ref={video}
-        style={styles.video}
-        source={{
-          uri: "https://videos.pexels.com/video-files/5377700/5377700-sd_540_960_25fps.mp4",
-        }}
-        resizeMode={ResizeMode.COVER}
-        shouldPlay
-        isLooping
-        onError={(e) => console.error("Video Error:", e)}
-      />
-      <View style={styles.overlay}>
+      {/* Removed Video component */}
+      <ScrollView contentContainerStyle={styles.overlay}>
         {/* Theme Toggle Switch */}
         <View style={styles.themeToggleContainer}>
           <Text style={styles.themeToggleText}>{isDarkMode ? "🌙" : "🌤️"}</Text>
@@ -118,23 +128,37 @@ export default function App() {
         </View>
 
         <Text style={styles.mainText}>Virtual Classroom</Text>
-        <Text style={styles.subText}>Chop The Data</Text>
-        <Text style={styles.tagline}>Have Fun</Text>
-      </View>
-      <View style={styles.buttons}>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => router.push("/auth/login")}
-        >
-          <Text style={styles.buttonText}>Login</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => router.push("/auth/register")}
-        >
-          <Text style={styles.buttonText}>Register</Text>
-        </TouchableOpacity>
-      </View>
+        <Text style={styles.subText}>Engage & Market Smarter</Text>
+        <Text style={styles.tagline}>AI-Powered Insights for Digital Growth</Text>
+
+        {/* Infographic Placeholders */}
+        <View style={styles.infographicContainer}>
+          <View style={styles.infographicPlaceholder}>
+            <Text style={styles.infographicText}>📊 Infographic: Boost Engagement via Interactive Features</Text>
+          </View>
+          <View style={styles.infographicPlaceholder}>
+            <Text style={styles.infographicText}>📈 Infographic: Track Marketing ROI with Integrated Analytics</Text>
+          </View>
+          <View style={styles.infographicPlaceholder}>
+            <Text style={styles.infographicText}>🎯 Infographic: Target Audience Segmentation using AI</Text>
+          </View>
+        </View>
+
+        <View style={styles.buttons}>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => router.push("/auth/login")}
+          >
+            <Text style={styles.buttonText}>Login</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => router.push("/auth/register")}
+          >
+            <Text style={styles.buttonText}>Register</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </View>
   );
 }
