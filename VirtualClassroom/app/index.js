@@ -3,6 +3,8 @@ import { View, StyleSheet, Text, TouchableOpacity, Dimensions } from "react-nati
 import { useRouter } from "expo-router";
 import { Ionicons } from '@expo/vector-icons'; // Assuming Ionicons are available, adjust if needed
 
+const { height, width } = Dimensions.get('window');
+
 const pages = [
   {
     title: "Your Smartest Classroom Yet.",
@@ -57,7 +59,7 @@ export default function OnboardingScreen() {
           ))}
         </View>
         <TouchableOpacity style={styles.arrowButton} onPress={handleNext}>
-          <Ionicons name="arrow-forward" size={30} color="white" />
+          <Ionicons name="arrow-forward" size={width * 0.08} color="white" />
         </TouchableOpacity>
       </View>
     </View>
@@ -67,34 +69,34 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F4F7F6", // Assuming a light background based on Figma
+    backgroundColor: "#F4F7F6",
     justifyContent: "space-between",
-    paddingTop: 50,
-    paddingBottom: 30,
-    paddingHorizontal: 20,
+    paddingTop: height * 0.06,
+    paddingBottom: height * 0.04,
+    paddingHorizontal: width * 0.05,
   },
   skipButton: {
     alignSelf: "flex-end",
   },
   skipButtonText: {
-    fontSize: 16,
+    fontSize: width * 0.04,
     color: "#555",
   },
   contentContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: width * 0.05,
   },
   title: {
-    fontSize: 24,
+    fontSize: width * 0.06,
     fontWeight: "bold",
     textAlign: "center",
-    marginBottom: 15,
+    marginBottom: height * 0.02,
     color: "#333",
   },
   description: {
-    fontSize: 16,
+    fontSize: width * 0.04,
     textAlign: "center",
     color: "#666",
   },
@@ -102,26 +104,26 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: width * 0.05,
   },
   dotContainer: {
     flexDirection: "row",
   },
   dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: width * 0.025,
+    height: width * 0.025,
+    borderRadius: width * 0.0125,
     backgroundColor: "#ccc",
-    marginHorizontal: 5,
+    marginHorizontal: width * 0.01,
   },
   activeDot: {
-    backgroundColor: "#007BFF", // Or a color matching the Figma active dot
+    backgroundColor: "#007BFF",
   },
   arrowButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: "#007BFF", // Or a color matching the Figma arrow button background
+    width: width * 0.12,
+    height: width * 0.12,
+    borderRadius: width * 0.06,
+    backgroundColor: "#007BFF",
     justifyContent: "center",
     alignItems: "center",
   },

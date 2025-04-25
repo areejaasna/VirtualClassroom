@@ -1,5 +1,12 @@
 import React, { useEffect } from "react";
-import { View, StyleSheet, TextInput, Text, TouchableOpacity } from "react-native";
+import {
+  View,
+  StyleSheet,
+  TextInput,
+  Text,
+  TouchableOpacity,
+  Dimensions,
+} from "react-native";
 import { Formik } from "formik";
 import * as Yup from "yup";
 import { useRouter } from "expo-router";
@@ -7,6 +14,8 @@ import { useMutation } from "@tanstack/react-query";
 import { loginUser } from "../(services)/api/api";
 import { useDispatch, useSelector } from "react-redux";
 import { loginAction } from "../(redux)/authSlice";
+
+const { height, width } = Dimensions.get('window');
 
 const LoginSchema = Yup.object().shape({
   email: Yup.string().email("Invalid email").required("Required"),
@@ -87,49 +96,50 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 16,
+    padding: height * 0.02,
     backgroundColor: "#f5f5f5",
   },
   title: {
-    fontSize: 32,
+    fontSize: height * 0.04,
     fontWeight: "bold",
-    marginBottom: 24,
+    marginBottom: height * 0.03,
   },
   form: {
     width: "100%",
   },
   input: {
-    height: 50,
+    height: height * 0.06,
     borderColor: "#ccc",
     borderWidth: 1,
     borderRadius: 8,
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    paddingHorizontal: width * 0.04,
+    marginBottom: height * 0.02,
     backgroundColor: "#fff",
   },
   errorText: {
     color: "red",
-    marginBottom: 16,
+    marginBottom: height * 0.02,
+    fontSize: height * 0.018,
   },
   button: {
-    height: 50,
+    height: height * 0.06,
     backgroundColor: "#6200ea",
     justifyContent: "center",
     alignItems: "center",
     borderRadius: 8,
-    marginTop: 16,
-    marginBottom: 16, // Added margin to separate button and text
+    marginTop: height * 0.02,
+    marginBottom: height * 0.02,
   },
   buttonText: {
     color: "#fff",
-    fontSize: 18,
+    fontSize: height * 0.022,
     fontWeight: "bold",
   },
   registerText: {
-    color: "#6200ea", // Or a color that indicates a link
-    fontSize: 16,
+    color: "#6200ea",
+    fontSize: height * 0.018,
     textAlign: "center",
-    marginTop: 10,
+    marginTop: height * 0.015,
     textDecorationLine: "underline",
   },
 });
