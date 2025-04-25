@@ -81,43 +81,67 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 16,
-    backgroundColor: "#f5f5f5",
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20, // Slightly more padding
+    backgroundColor: '#ffffff', // Cleaner white background
   },
   title: {
     fontSize: 32,
-    fontWeight: "bold",
-    marginBottom: 24,
+    fontWeight: 'bold',
+    marginBottom: 30, // Increased spacing
+    color: '#333', // Darker text color
   },
   form: {
-    width: "100%",
+    width: '100%',
+    maxWidth: 400, // Optional: Limit max width on larger screens
   },
   input: {
-    height: 50,
-    borderColor: "#ccc",
+    height: 55, // Slightly taller
+    borderColor: '#ddd', // Lighter border
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 10, // Softer corners
     paddingHorizontal: 16,
     marginBottom: 16,
-    backgroundColor: "#fff",
+    backgroundColor: '#f9f9f9', // Very light grey background for input
+    fontSize: 16,
+     // Add shadow for depth (optional, adjust as needed)
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2, // for Android
   },
   errorText: {
-    color: "red",
-    marginBottom: 16,
+    color: 'red',
+    marginBottom: 10, // Keep some space
+    marginTop: -10, // Reduce space above if needed
+    fontSize: 12,
+    paddingLeft: 5,
   },
   button: {
-    height: 50,
-    backgroundColor: "#6200ea",
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 8,
-    marginTop: 16,
+    height: 55,
+    backgroundColor: '#007AFF', // Standard blue
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10, // Softer corners
+    marginTop: 20, // Increased spacing before button
+     // Add shadow for depth (optional)
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3, // for Android
   },
   buttonText: {
-    color: "#fff",
+    color: '#fff',
     fontSize: 18,
-    fontWeight: "bold",
+    fontWeight: '600', // Slightly less bold
   },
 });
