@@ -1,7 +1,7 @@
 import React, { useState, createContext, useContext, useMemo } from 'react';
 import { useColorScheme } from 'react-native';
 import { lightTheme, darkTheme } from '../constants/themes';
-import RootLayoutNav from '../app/_layout'; // Assuming RootLayoutNav is what you want to wrap
+// import RootLayoutNav from '../_layout'; // Assuming RootLayoutNav is what you want to wrap
 import { Slot } from 'expo-router';
 
 const ThemeContext = createContext();
