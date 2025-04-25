@@ -128,7 +128,7 @@ export default function Room() {
         // socket.emit('leave-room', { roomId: routeRoomId, userId: user.id }); // Notify backend on unmount
         socket.disconnect();
       };
-    }\ else {
+    } else {
         console.warn("Socket not initialized due to missing BACKEND_API");
     }
     // Depend on the routeRoomId and user token to refetch if they change
