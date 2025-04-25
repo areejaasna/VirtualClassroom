@@ -71,6 +71,10 @@ export default function Login() {
             <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={isSubmitting}>
               <Text style={styles.buttonText}>{isSubmitting ? "Logging in..." : "Login"}</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => router.push("/auth/register")}>
+              <Text style={styles.registerText}>Don't have an account? Register here.</Text>
+            </TouchableOpacity>
           </View>
         )}
       </Formik>
@@ -114,10 +118,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 8,
     marginTop: 16,
+    marginBottom: 16, // Added margin to separate button and text
   },
   buttonText: {
     color: "#fff",
     fontSize: 18,
     fontWeight: "bold",
+  },
+  registerText: {
+    color: "#6200ea", // Or a color that indicates a link
+    fontSize: 16,
+    textAlign: "center",
+    marginTop: 10,
+    textDecorationLine: "underline",
   },
 });
