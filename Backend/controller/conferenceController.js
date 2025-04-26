@@ -2,8 +2,10 @@ const asyncHandler = require("express-async-handler");
 const { Server } = require("socket.io");
 const ConferenceRoom = require("../model/ConferenceRoom.js");
 const User = require("../model/User.js");
-// Consider adding Agora token generation logic if needed for production
-// const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
+const axios = require("axios"); // Import axios
+
+// Daily.co API key - Make sure to configure this securely in your environment variables
+const DAILY_API_KEY = process.env.DAILY_API_KEY;
 
 const conferenceCtrl = {
   //! Create a Video Conference Room
@@ -56,7 +58,7 @@ const conferenceCtrl = {
     }
   }),
 
-  //! Join a room (updates participant list in DB - Agora handles actual channel join)
+  //! Join a room (updates participant list in DB and gets Daily.co room URL)
   joinRoom: asyncHandler(async (req, res) => {
     const { roomId } = req.params;
     // Assuming userId is passed in request body or available via auth middleware (req.user.id)
@@ -66,10 +68,55 @@ const conferenceCtrl = {
        return res.status(400).json({ error: "User ID is required to join" });
     }
 
+    if (!DAILY_API_KEY) {
+        console.error("Daily.co API Key is not configured.");
+        return res.status(500).json({ error: "Server configuration error: Daily.co API Key missing." });
+    }
+
     try {
       const room = await ConferenceRoom.findById(roomId);
       if (!room) {
         return res.status(404).json({ error: "Room not found" });
+      }
+
+      let dailyRoomUrl = room.dailyRoomUrl;
+
+      // If no Daily.co room URL exists, create one
+      if (!dailyRoomUrl) {
+        console.log(`No Daily.co URL found for room ${roomId}. Creating a new Daily.co room.`);
+        try {
+          const dailyResponse = await axios.post(
+            'https://api.daily.co/v1/rooms',
+            { 
+                properties: { 
+                    enable_screenshare: true, 
+                    enable_chat: true, 
+                    enable_people: true, 
+                    enable_pip_ui: true, 
+                    enable_prejoin_ui: true, 
+                    start_video_off: false,
+                    start_audio_off: false,
+                    // You can add more Daily.co room properties here
+                    // See https://docs.daily.co/reference/rest-api/rooms/create-room
+                }
+            },
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${DAILY_API_KEY}`,
+              },
+            }
+          );
+
+          dailyRoomUrl = dailyResponse.data.url; // Get the room URL from Daily.co response
+          room.dailyRoomUrl = dailyRoomUrl; // Store the URL in your DB
+          await room.save();
+          console.log(`Created and stored Daily.co room URL for room ${roomId}: ${dailyRoomUrl}`);
+
+        } catch (dailyApiError) {
+          console.error("Error creating Daily.co room:", dailyApiError.response ? JSON.stringify(dailyApiError.response.data) : dailyApiError.message);
+          return res.status(500).json({ error: "Failed to create Daily.co room" });
+        }
       }
 
       // Add participant to DB list if not already present
@@ -79,23 +126,11 @@ const conferenceCtrl = {
         console.log(`User ${userId} added to participant list for room ${roomId}`);
       }
 
-      // Optionally generate Agora token here
-      // const appID = process.env.AGORA_APP_ID;
-      // const appCertificate = process.env.AGORA_APP_CERTIFICATE;
-      // const channelName = roomId; // Use MongoDB room ID as Agora channel name
-      // const uid = 0; // Use 0 for wildcard user ID, or assign specific user IDs
-      // const role = RtcRole.PUBLISHER;
-      // const expirationTimeInSeconds = 3600; // 1 hour
-      // const currentTimestamp = Math.floor(Date.now() / 1000);
-      // const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
-
-      // const token = RtcTokenBuilder.buildTokenWithUid(appID, appCertificate, channelName, uid, role, privilegeExpiredTs);
-      // console.log("Generated Agora Token:", token);
-
-      // Send back success message (and token if generated)
+      // Send back the Daily.co room URL to the frontend
       res.status(200).json({ 
         message: "Joined room successfully (participant list updated)", 
-        // token: token // Include token if using token authentication
+        dailyRoomUrl: dailyRoomUrl, // Include the Daily.co room URL
+        room: room // Optionally send updated room details
       });
 
     } catch (error) {
@@ -108,7 +143,7 @@ const conferenceCtrl = {
 };
 
 // Basic Socket.IO setup (Optional - can be removed if not needed for other features)
-// Agora handles the real-time communication for video/audio.
+// WebView approach for Daily.co handles the real-time communication for video/audio.
 // You might still use Socket.IO for chat, notifications, etc.
 const initializeSocket = (server) => {
   const io = new Server(server, { cors: { origin: "*" } });
@@ -118,7 +153,7 @@ const initializeSocket = (server) => {
 
     socket.on("join-room-notify", ({ roomId, userId }) => {
       // Example: Notify others in the room (via Socket.IO) that a user joined
-      // This is separate from Agora's channel joining.
+      // This is separate from Daily.co room joining via WebView.
       socket.join(roomId);
       socket.to(roomId).emit("user-joined-notify", { userId, socketId: socket.id });
       console.log(`Socket ${socket.id} associated with user ${userId} joined notification room ${roomId}`);
