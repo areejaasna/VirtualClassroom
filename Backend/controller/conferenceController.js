@@ -91,7 +91,7 @@ const conferenceCtrl = {
                 properties: { 
                     enable_screenshare: true, 
                     enable_chat: true, 
-                    enable_people: true, 
+                    enable_people_ui: true, 
                     enable_pip_ui: true, 
                     enable_prejoin_ui: true, 
                     start_video_off: false,
