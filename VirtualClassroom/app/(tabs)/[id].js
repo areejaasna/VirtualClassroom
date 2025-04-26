@@ -1,28 +1,15 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView, PermissionsAndroid, Platform } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSelector } from "react-redux";
 import axios from "axios";
-import io from "socket.io-client";
+// import io from "socket.io-client"; // Socket.IO might still be needed for other room management, but not WebRTC signaling now
 import Constants from 'expo-constants';
-import {
-  RTCPeerConnection,
-  RTCIceCandidate,
-  RTCSessionDescription,
-  MediaStream,
-  MediaStreamTrack,
-  mediaDevices,
-  RTCView, // Import RTCView
-} from 'react-native-webrtc';
 
-// STUN server configuration (You might want to use a TURN server for more robust connections)
-const configuration = {
-  iceServers: [
-    {
-      urls: 'stun:stun.l.google.com:19302',
-    },
-  ],
-};
+import RtcEngine, { AgoraVideoView, ChannelProfile, ClientRole } from 'react-native-agora';
+
+// You will need your Agora App ID
+const { AGORA_APP_ID } = Constants.expoConfig?.extra ?? {};
 
 export default function Room() {
   const { BACKEND_API } = Constants.expoConfig?.extra ?? {};
@@ -35,24 +22,12 @@ export default function Room() {
   const [isJoined, setIsJoined] = useState(false);
   const [error, setError] = useState(null);
 
-  // WebRTC state
-  const [localStream, setLocalStream] = useState(null);
-  const [remoteStreams, setRemoteStreams] = useState({}); // { [socketId]: MediaStream }
-  const peerConnections = useRef({}); // { [socketId]: RTCPeerConnection }
-  const localStreamRef = useRef(localStream); // Ref to hold the latest localStream
+  // Agora State
+  const engine = useRef<RtcEngine | null>(null);
+  const [remoteUsers, setRemoteUsers] = useState<number[]>([]); // UIDs of remote users
+  const [localUid, setLocalUid] = useState<number>(0); // Local user's UID
 
-  // Use a memoized socket instance
-  const socket = useMemo(() => {
-      if (!BACKEND_API) return null;
-      return io(BACKEND_API, { transports: ['websocket'] });
-  }, [BACKEND_API]);
-
-  // Update localStreamRef whenever localStream changes
-  useEffect(() => {
-      localStreamRef.current = localStream;
-  }, [localStream]);
-
-  // --- Effect for fetching room details and setting up socket ----
+  // --- Effect for fetching room details and setting up Agora ----
   useEffect(() => {
     if (!routeRoomId || !user || !user.token || !BACKEND_API) {
       if (!routeRoomId) console.error("Room ID missing from route parameters.");
@@ -62,6 +37,12 @@ export default function Room() {
       setIsLoading(false);
       return;
     }
+     if (!AGORA_APP_ID) {
+         console.error("Agora App ID is not configured in app.config.js");
+         setError("Agora configuration error.");
+         setIsLoading(false);
+         return;
+     }
 
     const fetchRoomDetails = async () => {
       setIsLoading(true);
@@ -73,8 +54,12 @@ export default function Room() {
           },
         });
         setRoomDetails(response.data);
+        // Check if current user is already in participants list (optional, depends on your backend logic)
         if (response.data?.participants?.some(p => p === user.id || p?._id === user.id)) {
-            setIsJoined(true);
+            // If already joined via backend, might automatically join Agora channel too
+             // This needs careful handling to avoid joining Agora without API confirmation
+            // For now, joining Agora is triggered by the `joinRoom` button.
+             // setIsJoined(true);
         }
       } catch (err) {
         const errorMsg = err.response ? JSON.stringify(err.response.data) : err.message;
@@ -87,228 +72,100 @@ export default function Room() {
 
     fetchRoomDetails();
 
-    // --- Socket Logic ---
-    if(socket) {
-      socket.connect();
+    // --- Agora Initialization ---
+    const initAgora = async () => {
+        try {
+            engine.current = await RtcEngine.create(AGORA_APP_ID);
+            await engine.current.enableVideo();
+             await engine.current.setChannelProfile(ChannelProfile.LiveBroadcasting);
+             await engine.current.setClientRole(ClientRole.Broadcaster);
 
-      socket.on("connect", () => {
-          console.log("Socket connected: ", socket.id);
-          // Join the room automatically if already 'joined' via backend or on connect
-          if (isJoined) {
-              socket.emit("join-webrtc-room", { roomId: routeRoomId, userId: user.id });
-          }
-      });
-
-      socket.on("user-joined", async (data) => {
-        console.log(`User ${data.userId} joined the room. Creating offer...`);
-        // A new user joined, initiate a call by creating an offer
-        createPeerConnection(data.socketId, true); // true to create offer
-      });
-
-      socket.on("offer", async (data) => {
-        console.log(`Received offer from \${data.socketId}`);
-        // Received an offer, create an answer
-        createPeerConnection(data.socketId, false); // false to not create offer initially
-        const pc = peerConnections.current[data.socketId];
-        await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socket.emit("answer", { socketId: data.socketId, sdp: pc.localDescription, roomId: routeRoomId });
-      });
-
-      socket.on("answer", async (data) => {
-        console.log(`Received answer from \${data.socketId}`);
-        // Received an answer, set remote description
-        const pc = peerConnections.current[data.socketId];
-        if (pc && pc.remoteDescription === null) {
-           await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-        } else {
-            console.warn("Peer connection or remote description not ready for answer.", data.socketId);
-        }
-      });
-
-      socket.on("candidate", async (data) => {
-        console.log(`Received ICE candidate from ${data.socketId}`);
-        // Received an ICE candidate, add it to the peer connection
-        const pc = peerConnections.current[data.socketId];
-         if (pc) {
-            try {
-                await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-            } catch (e) {
-                console.error("Error adding received ICE candidate:", e);
-            }
-         } else {
-             console.warn("Peer connection not found for candidate.", data.socketId);
-         }
-      });
-
-      socket.on("user-left", (data) => {
-        console.log(`User ${data.socketId} left the room.`);
-        // A user left, close their peer connection and remove their stream
-        closePeerConnection(data.socketId);
-      });
-
-       socket.on("webrtc-users-in-room", async (data) => {
-           console.log("WebRTC users in room:", data.users);
-            // For users already in the room when you join, create offers for them
-            for (const userId in data.users) {
-                if (userId !== user.id) { // Don't connect to self
-                    createPeerConnection(data.users[userId].socketId, true); // true to create offer
-                }
-            }
-       });
-
-      // Cleanup: disconnect socket and close peer connections
-      return () => {
-        console.log("Cleaning up room effect:", routeRoomId);
-        if (socket) {
-            socket.emit('leave-webrtc-room', { roomId: routeRoomId, userId: user.id }); // Notify backend
-            socket.disconnect();
-        }
-        // Close all peer connections
-        for (const socketId in peerConnections.current) {
-            closePeerConnection(socketId);
-        }
-         setRemoteStreams({});
-         setLocalStream(null);
-      };
-    } else {
-        console.warn("Socket not initialized due to missing BACKEND_API");
-    }
-  }, [routeRoomId, user?.token, user?.id, socket, isJoined]); // Added socket and isJoined to dependency array
-
-    // --- Effect for getting local media stream ---
-    useEffect(() => {
-        let stream = null;
-        const getLocalStream = async () => {
-            try {
-                 stream = await mediaDevices.getUserMedia({
-                    video: true,
-                    audio: true,
-                });
-                setLocalStream(stream);
-                 console.log("Local stream obtained.");
-            } catch (e) {
-                console.error("Error getting local stream:", e);
-                 Alert.alert("Permissions Error", "Failed to get camera/microphone access.");
-            }
-        };
-
-        if (!localStream) {
-           getLocalStream();
-        }
-
-        return () => {
-            // Stop all tracks on cleanup
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-        };
-
-    }, [localStream]); // Rerun if localStream is null
-
-
-  const createPeerConnection = (socketId, isOfferCreator) => {
-    if (peerConnections.current[socketId]) {
-        console.log("Peer connection already exists for", socketId);
-        return peerConnections.current[socketId];
-    }
-    console.log("Creating peer connection for", socketId);
-    const pc = new RTCPeerConnection(configuration);
-
-    // Add local stream tracks to the peer connection
-    if (localStreamRef.current) {
-       localStreamRef.current.getTracks().forEach(track => {
-           pc.addTrack(track, localStreamRef.current);
-           console.log("Added local track to peer connection.", track.kind);
-       });
-    } else {
-        console.warn("Local stream not available when creating peer connection.");
-    }
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        console.log("Generated ICE candidate.", event.candidate);
-        // Send ICE candidates to the remote peer via socket
-        socket.emit("candidate", { socketId: socketId, candidate: event.candidate, roomId: routeRoomId });
-      }
-    };
-
-    pc.ontrack = (event) => {
-        console.log("Track received from remote peer.", event.streams);
-         // event.streams is an array of MediaStream objects
-        setRemoteStreams(prev => ({
-            ...prev,
-            [socketId]: event.streams[0] // Assuming one stream per peer
-        }));
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      console.log(`ICE connection state for ${socketId}: ${pc.iceConnectionState}`);
-    };
-
-     pc.onconnectionstatechange = () => {
-         console.log(`Connection state for ${socketId}: ${pc.connectionState}`);
-          if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-               console.log(`Connection closed for ${socketId}. Cleaning up.`);
-               closePeerConnection(socketId);
-           }
-     };
-
-     pc.onsignalingstatechange = () => {
-        console.log(`Signaling state for ${socketId}: ${pc.signalingState}`);
-     };
-
-    peerConnections.current[socketId] = pc;
-
-    if (isOfferCreator) {
-      // If this instance is initiating the call, create an offer
-      createOffer(socketId);
-    }
-
-     return pc;
-  };
-
-  const createOffer = async (socketId) => {
-    console.log("Creating offer for", socketId);
-    const pc = peerConnections.current[socketId];
-    try {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-       console.log("Sending offer to", socketId);
-      socket.emit("offer", { socketId: socketId, sdp: pc.localDescription, roomId: routeRoomId });
-    } catch (e) {
-      console.error("Error creating offer:", e);
-    }
-  };
-
-   const closePeerConnection = (socketId) => {
-        const pc = peerConnections.current[socketId];
-        if (pc) {
-            console.log("Closing peer connection for", socketId);
-            pc.close();
-            delete peerConnections.current[socketId];
-            // Remove the remote stream for this peer
-            setRemoteStreams(prev => {
-                const newStreams = { ...prev };
-                delete newStreams[socketId];
-                return newStreams;
+            // Set up event handlers
+            engine.current.addListener('JoinChannelSuccess', (channel, uid, elapsed) => {
+                console.log('JoinChannelSuccess', channel, uid, elapsed);
+                setLocalUid(uid);
+                setIsJoined(true);
             });
+
+            engine.current.addListener('UserJoined', (uid, elapsed) => {
+                console.log('UserJoined', uid, elapsed);
+                setRemoteUsers(prevUsers => [...prevUsers, uid]);
+            });
+
+            engine.current.addListener('UserOffline', (uid, reason) => {
+                console.log('UserOffline', uid, reason);
+                setRemoteUsers(prevUsers => prevUsers.filter(userUid => userUid !== uid));
+            });
+
+             engine.current.addListener('Error', (err) => {
+                 console.error('Agora Error:', err);
+                 setError(`Agora Error: ${err}`);
+             });
+
+             console.log("Agora engine initialized.");
+
+        } catch (e) {
+            console.error("Failed to initialize Agora:", e);
+             setError("Failed to initialize video conferencing. Please try again.");
         }
-   };
+    };
+
+     // Initialize Agora when the component mounts
+     initAgora();
+
+    // Cleanup: Destroy Agora engine when component unmounts
+    return () => {
+        console.log("Cleaning up Agora engine.");
+        engine.current?.destroy();
+         engine.current = null;
+    };
+
+  }, [routeRoomId, user?.token, user?.id, BACKEND_API]); // Re-run effect if these dependencies change
+
+   // --- Permissions Request (for Android) ---
+    const requestPermissions = async () => {
+        if (Platform.OS === 'android') {
+            try {
+                const granted = await PermissionsAndroid.requestMultiple(
+                    [
+                        PermissionsAndroid.PERMISSIONS.CAMERA,
+                        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+                    ]
+                );
+                 if (
+                     granted[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.results.GRANTED &&
+                     granted[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.results.GRANTED
+                 ) {
+                     console.log("Camera and microphone permissions granted.");
+                     return true;
+                 } else {
+                     console.log("Camera or microphone permissions denied.");
+                     Alert.alert("Permissions Required", "Camera and microphone access are needed for video conferencing.");
+                     return false;
+                 }
+            } catch (err) {
+                console.warn(err);
+                 Alert.alert("Permissions Error", "An error occurred while requesting permissions.");
+                 return false;
+            }
+        }
+        return true; // Permissions not needed this way for iOS
+    };
 
   const joinRoom = async () => {
-    if (!user || !user.id || !user.token || !routeRoomId || !BACKEND_API) {
-      Alert.alert("Error", "Cannot join room. Missing required information.");
+    if (!user || !user.id || !user.token || !routeRoomId || !BACKEND_API || !engine.current) {
+      Alert.alert("Error", "Cannot join room. Missing required information or Agora engine not initialized.");
       return;
     }
-     if (!socket || !socket.connected) {
-         Alert.alert("Error", "Socket not connected. Please check your network.");
+
+     // Request permissions before joining
+     const hasPermissions = await requestPermissions();
+     if (!hasPermissions) {
          return;
      }
 
     try {
-      console.log(`User ${user.id} attempting to join room ${routeRoomId}`);
+      console.log(`User ${user.id} attempting to join backend room ${routeRoomId}`);
       // API call to backend to register user in the room
       await axios.post(
         `${BACKEND_API}api/conference/join/${routeRoomId}`,
@@ -320,45 +177,60 @@ export default function Room() {
         }
       );
 
-      // Emit socket event AFTER successful API call to join the WebRTC room
-      socket.emit("join-webrtc-room", { roomId: routeRoomId, userId: user.id });
-      console.log(`User ${user.id} successfully joined backend room ${routeRoomId} and emitted socket event`);
-      setIsJoined(true);
+      console.log(`User ${user.id} successfully joined backend room ${routeRoomId}. Attempting to join Agora channel.`);
 
-      // Optimistically update participants list (optional)
-      setRoomDetails(prev => prev ? ({...prev, participants: [...prev.participants, user.id]}) : null);
-      // Alert.alert("Success", "You have joined the room."); // Avoid alert on successful join for smoother UX
+      // Join Agora channel after successful backend join
+       // For a production app, you should fetch an Agora token from your backend here
+       const agoraToken = null; // Replace with token fetched from backend
+       const agoraUid = 0; // Use 0 for Agora to assign a UID, or fetch a specific UID from backend
+
+      await engine.current.joinChannel(agoraToken, routeRoomId, null, agoraUid);
+
+      // setIsJoined(true); // This is set in the JoinChannelSuccess listener now
+
+      Alert.alert("Success", "Attempting to join video channel..."); // Provide feedback to user
 
     } catch (err) {
       const errorMsg = err.response ? JSON.stringify(err.response.data) : err.message;
       console.error("Error joining room:", errorMsg);
+      setError(`Failed to join room: ${err.response?.data?.message || 'Please try again.'}`);
       Alert.alert("Error", `Failed to join room: ${err.response?.data?.message || 'Please try again.'}`);
     }
   };
 
-    const leaveRoom = () => {
+    const leaveRoom = async () => {
         console.log("Leaving room...");
-         if (socket) {
-            socket.emit('leave-webrtc-room', { roomId: routeRoomId, userId: user.id }); // Notify backend/other peers
-             // The cleanup effect will handle closing connections and socket disconnect
+         if (engine.current) {
+            try {
+                await engine.current.leaveChannel();
+                console.log("Left Agora channel.");
+            } catch (e) {
+                console.error("Error leaving Agora channel:", e);
+            }
          }
-         router.back(); // Navigate back after initiating leave
+         setRemoteUsers([]); // Clear remote users on leaving
+         setIsJoined(false);
+         // Optionally notify backend that user left the room
+         // axios.post(`${BACKEND_API}api/conference/leave/${routeRoomId}`, { userId: user.id }, { headers: { Authorization: `Bearer ${user.token}` } });
+         router.back(); // Navigate back
     };
 
-    const toggleCamera = () => {
-        if (localStream) {
-            localStream.getVideoTracks().forEach(track => {
-                track.enabled = !track.enabled;
-            });
+    const toggleCamera = async () => {
+        if (engine.current) {
+            // Toggle the state of the local video stream
+            const isEnabled = (await engine.current.enableLocalVideo(false)).result; // Check current state
+            await engine.current.enableLocalVideo(!isEnabled); // Toggle
+            console.log("Camera toggled.", !isEnabled);
         }
     };
 
-    const toggleMic = () => {
-        if (localStream) {
-            localStream.getAudioTracks().forEach(track => {
-                track.enabled = !track.enabled;
-            });
-        }
+    const toggleMic = async () => {
+         if (engine.current) {
+            // Toggle the state of the local audio stream
+             const isMuted = (await engine.current.muteLocalAudioStream(true)).result; // Check current state
+             await engine.current.muteLocalAudioStream(!isMuted); // Toggle
+             console.log("Microphone toggled.", !isMuted);
+         }
     };
 
   // --- Render States ---
@@ -378,32 +250,23 @@ export default function Room() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Room: {roomDetails.title}</Text>
+
       {isJoined ? (
           <View style={styles.videoContainer}>
               {/* Local Video */}
-              {localStream && (
-                  <View style={styles.localVideoContainer}>
-                       <Text style={styles.videoLabel}>You</Text>
-                      <RTCView
-                          streamURL={localStream.toURL()}
-                          style={styles.localVideo}
-                          objectFit={'cover'}
-                          mirror={true} // Mirror local video
-                      />
-                  </View>
-              )}
+               <View style={styles.localVideoContainer}>
+                     <Text style={styles.videoLabel}>You</Text>
+                     <AgoraVideoView style={styles.localVideo} showLocalVideo={true} zOrderMediaOverlay={true} />
+               </View>
 
               {/* Remote Videos */}
               <ScrollView horizontal style={styles.remoteVideosScrollView}>
-                  {Object.keys(remoteStreams).map(socketId => (
-                      <View key={socketId} style={styles.remoteVideoContainer}>
-                           {/* You might want to display remote user's name based on socketId/userId mapping */}
-                           <Text style={styles.videoLabel}>Remote User ({socketId.substring(0, 4)}...)</Text>
-                           <RTCView
-                              streamURL={remoteStreams[socketId].toURL()}
-                              style={styles.remoteVideo}
-                              objectFit={'cover'}
-                          />
+                  {remoteUsers.map(uid => (
+                      <View key={uid} style={styles.remoteVideoContainer}>
+                           <Text style={styles.videoLabel}>
+                               Remote User {uid}
+                           </Text>
+                           <AgoraVideoView style={styles.remoteVideo} remoteUid={uid} zOrderMediaOverlay={true} />
                       </View>
                   ))}
               </ScrollView>
