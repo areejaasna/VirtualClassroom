@@ -33,9 +33,7 @@ export default {
         BACKEND_API: process.env.BACKEND_API,
         ML_API:process.env.ML_API,
         AGORA_APP_ID: process.env.AGORA_APP_ID,
-        eas: {
-          projectId: "your-eas-project-id" // Replace with your EAS project ID if using EAS
-        }
+      
     },
     "plugins": [
       "expo-router"

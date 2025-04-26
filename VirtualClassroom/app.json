@@ -12,10 +12,16 @@
       "resizeMode": "contain",
       "backgroundColor": "#45B29D"
     },
+    
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Allow access to camera for video calls",
+        "NSMicrophoneUsageDescription": "Allow access to microphone for audio in video calls"
+      }
     },
     "android": {
+      "permissions": ["CAMERA", "RECORD_AUDIO"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"

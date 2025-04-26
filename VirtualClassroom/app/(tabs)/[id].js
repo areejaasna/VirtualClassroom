@@ -133,8 +133,8 @@ export default function Room() {
                     ]
                 );
                  if (
-                     granted[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.results.GRANTED &&
-                     granted[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.results.GRANTED
+                     granted[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED &&
+                     granted[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED
                  ) {
                      console.log("Camera and microphone permissions granted.");
                      return true;
