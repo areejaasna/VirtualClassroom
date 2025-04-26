@@ -20,14 +20,28 @@ export default function Room() {
 
 
   useEffect(() => {
-    if (!routeRoomId || !user || !user.token || !BACKEND_API) {
-      if (!routeRoomId) console.error("Room ID missing from route parameters.");
-      if (!user || !user.token) Alert.alert("Authentication Error", "User data not found. Please log in again.");
-      if (!BACKEND_API) console.error("Backend API URL is not configured.");
-      setError("Cannot load room due to missing information.");
+    // Check specifically for missing room ID first
+    if (!routeRoomId) {
+      console.error("Room ID missing from route parameters.");
+      setError("Room ID is missing from navigation parameters. Cannot load room.");
       setIsLoading(false);
       return;
     }
+
+    if (!user || !user.token) {
+        Alert.alert("Authentication Error", "User data not found. Please log in again.");
+        setError("User data missing. Please log in again.");
+        setIsLoading(false);
+        return;
+    }
+
+    if (!BACKEND_API) {
+        console.error("Backend API URL is not configured.");
+        setError("Backend API URL is not configured. Cannot load room.");
+        setIsLoading(false);
+        return;
+    }
+
 
     const fetchRoomAndDailyUrl = async () => {
       setIsLoading(true);
