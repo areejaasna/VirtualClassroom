@@ -1,18 +1,16 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react-native";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView, PermissionsAndroid, Platform } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSelector } from "react-redux";
 import axios from "axios";
-// import io from "socket.io-client"; // Socket.IO might still be needed for other room management, but not WebRTC signaling now
 import Constants from 'expo-constants';
 
-import RtcEngine, { AgoraVideoView, ChannelProfile, ClientRole } from 'react-native-agora';
+// Import Daily.co SDK
+import Daily from '@daily-co/react-native-daily-js'; // Make sure you have installed @daily-co/react-native-daily-js
 
-// You will need your Agora App ID
-const { AGORA_APP_ID } = Constants.expoConfig?.extra ?? {};
+const { BACKEND_API } = Constants.expoConfig?.extra ?? {};
 
 export default function Room() {
-  const { BACKEND_API } = Constants.expoConfig?.extra ?? {};
   const router = useRouter();
   const { id: routeRoomId } = useLocalSearchParams();
   const user = useSelector((state) => state.auth.user);
@@ -22,12 +20,15 @@ export default function Room() {
   const [isJoined, setIsJoined] = useState(false);
   const [error, setError] = useState(null);
 
-  // Agora State
-  const engine = useRef<RtcEngine | null>(null);
-  const [remoteUsers, setRemoteUsers] = useState<number[]>([]); // UIDs of remote users
-  const [localUid, setLocalUid] = useState<number>(0); // Local user's UID
+  // Daily.co State
+  const callObject = useRef(null);
+  // State to hold remote participants (Daily.co participant objects)
+  const [remoteParticipants, setRemoteParticipants] = useState([]);
+  // State to hold local participant (Daily.co participant object)
+  const [localParticipant, setLocalParticipant] = useState(null);
 
-  // --- Effect for fetching room details and setting up Agora ----
+
+  // --- Effect for fetching room details and setting up Daily.co ----
   useEffect(() => {
     if (!routeRoomId || !user || !user.token || !BACKEND_API) {
       if (!routeRoomId) console.error("Room ID missing from route parameters.");
@@ -37,12 +38,6 @@ export default function Room() {
       setIsLoading(false);
       return;
     }
-     if (!AGORA_APP_ID) {
-         console.error("Agora App ID is not configured in app.config.js");
-         setError("Agora configuration error.");
-         setIsLoading(false);
-         return;
-     }
 
     const fetchRoomDetails = async () => {
       setIsLoading(true);
@@ -54,13 +49,6 @@ export default function Room() {
           },
         });
         setRoomDetails(response.data);
-        // Check if current user is already in participants list (optional, depends on your backend logic)
-        if (response.data?.participants?.some(p => p === user.id || p?._id === user.id)) {
-            // If already joined via backend, might automatically join Agora channel too
-             // This needs careful handling to avoid joining Agora without API confirmation
-            // For now, joining Agora is triggered by the `joinRoom` button.
-             // setIsJoined(true);
-        }
       } catch (err) {
         const errorMsg = err.response ? JSON.stringify(err.response.data) : err.message;
         console.error("Error fetching room details:", errorMsg);
@@ -72,52 +60,71 @@ export default function Room() {
 
     fetchRoomDetails();
 
-    // --- Agora Initialization ---
-    const initAgora = async () => {
-        try {
-            engine.current = await RtcEngine.create(AGORA_APP_ID);
-            await engine.current.enableVideo();
-             await engine.current.setChannelProfile(ChannelProfile.LiveBroadcasting);
-             await engine.current.setClientRole(ClientRole.Broadcaster);
+    // --- Daily.co Initialization ---
+    // We will create the call object when the component mounts
+    callObject.current = Daily.createCallObject();
 
-            // Set up event handlers
-            engine.current.addListener('JoinChannelSuccess', (channel, uid, elapsed) => {
-                console.log('JoinChannelSuccess', channel, uid, elapsed);
-                setLocalUid(uid);
-                setIsJoined(true);
-            });
+    // Set up Daily.co event handlers
+    const CO = callObject.current;
 
-            engine.current.addListener('UserJoined', (uid, elapsed) => {
-                console.log('UserJoined', uid, elapsed);
-                setRemoteUsers(prevUsers => [...prevUsers, uid]);
-            });
-
-            engine.current.addListener('UserOffline', (uid, reason) => {
-                console.log('UserOffline', uid, reason);
-                setRemoteUsers(prevUsers => prevUsers.filter(userUid => userUid !== uid));
-            });
-
-             engine.current.addListener('Error', (err) => {
-                 console.error('Agora Error:', err);
-                 setError(`Agora Error: ${err}`);
-             });
-
-             console.log("Agora engine initialized.");
-
-        } catch (e) {
-            console.error("Failed to initialize Agora:", e);
-             setError("Failed to initialize video conferencing. Please try again.");
-        }
+    const handleJoinedMeeting = (event) => {
+        console.log('Daily event: joined-meeting', event);
+        setIsJoined(true);
+        setLocalParticipant(event.participants.local);
+        // Initialize remote participants from the event
+        const initialRemoteParticipants = Object.values(event.participants).filter(p => !p.local);
+        setRemoteParticipants(initialRemoteParticipants);
     };
 
-     // Initialize Agora when the component mounts
-     initAgora();
+    const handleParticipantJoined = (event) => {
+        console.log('Daily event: participant-joined', event);
+        setRemoteParticipants(prevParticipants => [...prevParticipants, event.participant]);
+    };
 
-    // Cleanup: Destroy Agora engine when component unmounts
+    const handleParticipantLeft = (event) => {
+        console.log('Daily event: participant-left', event);
+        setRemoteParticipants(prevParticipants => prevParticipants.filter(p => p.session_id !== event.participant.session_id));
+    };
+
+    const handleParticipantUpdated = (event) => {
+         console.log('Daily event: participant-updated', event);
+         // Update the participant in the state
+         setRemoteParticipants(prevParticipants =>
+             prevParticipants.map(p =>
+                 p.session_id === event.participant.session_id ? event.participant : p
+             )
+         );
+         if (event.participant.local) {
+             setLocalParticipant(event.participant);
+         }
+     };
+
+
+    const handleError = (event) => {
+        console.error('Daily event: error', event);
+        setError(`Daily.co Error: ${event.errorMsg}`);
+        // Depending on the error, you might want to leave the room or show an error message
+        // callObject.current?.leave();
+        // setIsJoined(false);
+    };
+
+    // Add event listeners
+    CO.on('joined-meeting', handleJoinedMeeting);
+    CO.on('participant-joined', handleParticipantJoined);
+    CO.on('participant-left', handleParticipantLeft);
+    CO.on('participant-updated', handleParticipantUpdated); // Listen for track changes, etc.
+    CO.on('error', handleError);
+    // Add more listeners as needed (e.g., 'camera-error', 'microphone-error')
+
+
+    console.log("Daily.co call object created and listeners set.");
+
+    // Cleanup: Leave the Daily.co room and destroy the call object
     return () => {
-        console.log("Cleaning up Agora engine.");
-        engine.current?.destroy();
-         engine.current = null;
+        console.log("Cleaning up Daily.co call object.");
+        CO.leave(); // Attempt to leave gracefully
+        CO.destroy();
+        callObject.current = null;
     };
 
   }, [routeRoomId, user?.token, user?.id, BACKEND_API]); // Re-run effect if these dependencies change
@@ -145,7 +152,7 @@ export default function Room() {
                  }
             } catch (err) {
                 console.warn(err);
-                 Alert.alert("Permissions Error", "An error occurred while requesting permissions.");
+                 Alert.alert("Permissions Error", "An error occurred while requesting permissions." , err.message);
                  return false;
             }
         }
@@ -153,8 +160,9 @@ export default function Room() {
     };
 
   const joinRoom = async () => {
-    if (!user || !user.id || !user.token || !routeRoomId || !BACKEND_API || !engine.current) {
-      Alert.alert("Error", "Cannot join room. Missing required information or Agora engine not initialized.");
+    // Check if callObject is initialized
+    if (!user || !user.id || !user.token || !routeRoomId || !BACKEND_API || !callObject.current) {
+      Alert.alert("Error", "Cannot join room. Missing required information or Daily.co call object not initialized.");
       return;
     }
 
@@ -166,8 +174,8 @@ export default function Room() {
 
     try {
       console.log(`User ${user.id} attempting to join backend room ${routeRoomId}`);
-      // API call to backend to register user in the room
-      await axios.post(
+      // API call to backend to register user in the room and get Daily.co room information
+      const response = await axios.post(
         `${BACKEND_API}api/conference/join/${routeRoomId}`,
         { userId: user.id },
         {
@@ -177,16 +185,24 @@ export default function Room() {
         }
       );
 
-      console.log(`User ${user.id} successfully joined backend room ${routeRoomId}. Attempting to join Agora channel.`);
+      console.log(`User ${user.id} successfully joined backend room ${routeRoomId}. Attempting to join Daily.co channel.`);
 
-      // Join Agora channel after successful backend join
-       // For a production app, you should fetch an Agora token from your backend here
-       const agoraToken = null; // Replace with token fetched from backend
-       const agoraUid = 0; // Use 0 for Agora to assign a UID, or fetch a specific UID from backend
+      // --- Join Daily.co channel after successful backend join ---
+      // You need to get the Daily.co room URL from the backend response.
+      // Assuming the backend response includes a field like `dailyRoomUrl`
+      const dailyRoomUrl = response.data?.dailyRoomUrl; // <-- **You need to update your backend to return this**
 
-      await engine.current.joinChannel(agoraToken, routeRoomId, null, agoraUid);
+      if (!dailyRoomUrl) {
+          console.error("Daily.co room URL not received from backend.");
+          setError("Failed to get Daily.co room information from backend.");
+          Alert.alert("Error", "Failed to get Daily.co room information from backend.");
+          return;
+      }
 
-      // setIsJoined(true); // This is set in the JoinChannelSuccess listener now
+      // Join the Daily.co meeting
+      await callObject.current.join({ url: dailyRoomUrl });
+
+      // setIsJoined is set in the 'joined-meeting' event listener
 
       Alert.alert("Success", "Attempting to join video channel..."); // Provide feedback to user
 
@@ -200,15 +216,16 @@ export default function Room() {
 
     const leaveRoom = async () => {
         console.log("Leaving room...");
-         if (engine.current) {
+         if (callObject.current) {
             try {
-                await engine.current.leaveChannel();
-                console.log("Left Agora channel.");
+                await callObject.current.leave();
+                console.log("Left Daily.co channel.");
             } catch (e) {
-                console.error("Error leaving Agora channel:", e);
+                console.error("Error leaving Daily.co channel:", e);
             }
          }
-         setRemoteUsers([]); // Clear remote users on leaving
+         setRemoteParticipants([]); // Clear remote users on leaving
+         setLocalParticipant(null);
          setIsJoined(false);
          // Optionally notify backend that user left the room
          // axios.post(`${BACKEND_API}api/conference/leave/${routeRoomId}`, { userId: user.id }, { headers: { Authorization: `Bearer ${user.token}` } });
@@ -216,20 +233,22 @@ export default function Room() {
     };
 
     const toggleCamera = async () => {
-        if (engine.current) {
-            // Toggle the state of the local video stream
-            const isEnabled = (await engine.current.enableLocalVideo(false)).result; // Check current state
-            await engine.current.enableLocalVideo(!isEnabled); // Toggle
-            console.log("Camera toggled.", !isEnabled);
+        if (callObject.current) {
+            const participant = callObject.current.participants().local;
+            const currentCameraState = participant?.videoTrack?.state;
+            const isCameraOff = currentCameraState === 'off' || !participant?.videoTrack;
+            await callObject.current.setLocalVideo(isCameraOff);
+            console.log("Camera toggled.");
         }
     };
 
     const toggleMic = async () => {
-         if (engine.current) {
-            // Toggle the state of the local audio stream
-             const isMuted = (await engine.current.muteLocalAudioStream(true)).result; // Check current state
-             await engine.current.muteLocalAudioStream(!isMuted); // Toggle
-             console.log("Microphone toggled.", !isMuted);
+         if (callObject.current) {
+             const participant = callObject.current.participants().local;
+             const currentMicState = participant?.audioTrack?.state;
+             const isMicMuted = currentMicState === 'off' || !participant?.audioTrack;
+             await callObject.current.setLocalAudio(isMicMuted);
+             console.log("Microphone toggled.");
          }
     };
 
@@ -256,17 +275,36 @@ export default function Room() {
               {/* Local Video */}
                <View style={styles.localVideoContainer}>
                      <Text style={styles.videoLabel}>You</Text>
-                     <AgoraVideoView style={styles.localVideo} showLocalVideo={true} zOrderMediaOverlay={true} />
+                     {/* TODO: Replace with Daily.co local video rendering component */}
+                     {/* Example: <DailyMediaView callObject={callObject.current} sessionId="local" style={styles.localVideo} /> */}
+                    {localParticipant?.videoTrack && (
+                         // You might need a custom component or a component from @daily-co/react-native-daily-js
+                         // that takes the video track or participant object to render the video.
+                         // <DailyVideoRenderer participant={localParticipant} style={styles.localVideo} />
+                         <View style={{flex: 1, backgroundColor: '#ccc', justifyContent: 'center', alignItems: 'center'}}>
+                            <Text>Local Video Feed Here</Text>
+                            {/* Integrate DailyMediaView or equivalent */}
+                         </View>
+                     )}
                </View>
 
               {/* Remote Videos */}
               <ScrollView horizontal style={styles.remoteVideosScrollView}>
-                  {remoteUsers.map(uid => (
-                      <View key={uid} style={styles.remoteVideoContainer}>
+                  {remoteParticipants.map(participant => (
+                      <View key={participant.session_id} style={styles.remoteVideoContainer}>
                            <Text style={styles.videoLabel}>
-                               Remote User {uid}
+                               {participant.user_name || `Remote User ${participant.session_id.substring(0, 4)}...`}
                            </Text>
-                           <AgoraVideoView style={styles.remoteVideo} remoteUid={uid} zOrderMediaOverlay={true} />
+                           {/* TODO: Replace with Daily.co remote video rendering component */}
+                            {participant.videoTrack && (
+                                // You might need a custom component or a component from @daily-co/react-native-daily-js
+                                // that takes the video track or participant object to render the video.
+                                // <DailyVideoRenderer participant={participant} style={styles.remoteVideo} />
+                                <View style={{flex: 1, backgroundColor: '#ccc', justifyContent: 'center', alignItems: 'center'}}>
+                                    <Text>Remote Video Feed Here</Text>
+                                    {/* Integrate DailyMediaView or equivalent */}
+                                </View>
+                            )}
                       </View>
                   ))}
               </ScrollView>
