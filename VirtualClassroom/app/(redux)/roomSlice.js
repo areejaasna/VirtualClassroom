@@ -42,6 +42,7 @@ const roomSlice = createSlice({
       state.users = action.payload.users;
       state.videoCall = action.payload.videoCall;
     }
+    );
   },
 });
 

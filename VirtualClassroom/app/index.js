@@ -9,7 +9,7 @@ import {
 import { Video, ResizeMode } from "expo-av";
 import { useRouter } from "expo-router";
 import { useDispatch } from "react-redux";
-import { joinRoom } from "./app/(redux)/roomSlice";
+import { joinRoom } from "./(redux)/roomSlice";
 
 export default function App() {
   const video = React.useRef(null);
