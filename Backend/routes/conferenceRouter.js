@@ -4,9 +4,9 @@ const isAuthenticated = require("../middlewares/isAuth.js");
 
 const router = express.Router();
 
-router.post("/create", isAuthenticated, conferenceCtrl.createRoom);
-router.get("/rooms", isAuthenticated, conferenceCtrl.getRooms);
-router.post("/join/:roomId", isAuthenticated, conferenceCtrl.joinRoom);
-router.get("/rooms/:roomId", isAuthenticated, conferenceCtrl.getRoomById);
+router.post("/newRoom", conferenceCtrl.createRoom);
+router.get("/rooms", conferenceCtrl.getAllRooms);
+router.get("/:id", conferenceCtrl.getRoomById)
+
 
 module.exports = router;

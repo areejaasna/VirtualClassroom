@@ -2,25 +2,15 @@ const mongoose = require("mongoose");
 
 const ConferenceRoomSchema = new mongoose.Schema(
   {
-    title: {
+    roomName: {
       type: String,
       required: true,
     },
-    host: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+    roomId:{
+      type:String,
       required: true,
-    },
-    participants: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
-    createdAt: {
-      type: Date,
-      default: Date.now,
-    },
+    }
+
   },
   { timestamps: true }
 );

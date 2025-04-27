@@ -5,7 +5,6 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const socketIo = require("socket.io");
 const router = require("./routes/users");
-const conferenceRouter = require("./routes/conferenceRouter");
 const { initializeSocket } = require("./controller/conferenceController");
 const errorHandler = require("./middlewares/errorHandler");
 
@@ -27,7 +26,6 @@ app.use(express.json()); // Parse JSON request body
 
 //! Routes
 app.use("/api/users", router);
-app.use("/api/conference", conferenceRouter);
 
 //! Initialize Socket.io
 initializeSocket(io);
