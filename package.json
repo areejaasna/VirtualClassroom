@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "react-native-webrtc": "^124.0.5",
+    "socket.io-client": "^4.8.1"
+  }
+}
