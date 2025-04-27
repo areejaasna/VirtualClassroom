@@ -1,18 +1,41 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const asyncHandler = require("express-async-handler");
+const streamifier = require('streamifier'); // To convert buffer to stream
+const cloudinary = require("../cloudinary"); // Import Cloudinary config
+const UserImage = require("../model/UserImage"); // Import the new UserImage model
+
 // Import the destructured models from User.js
 const { User, Student, Teacher, Admin } = require("../model/User");
-//require('dotenv').config();
 
 // Helper function for validation
 const validateFields = (fields) => {
   for (const key in fields) {
-    // Check for undefined, null, or empty string
     if (fields[key] === undefined || fields[key] === null || fields[key] === '') {
       throw new Error(`Field '${key}' is required.`);
     }
   }
+};
+
+// Helper function for Cloudinary upload
+const uploadToCloudinary = (buffer, folder, userId) => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: folder, // e.g., 'user_profiles'
+        public_id: `user_${userId}_${Date.now()}`,
+        resource_type: "image"
+      },
+      (error, result) => {
+        if (error) {
+          console.error('Cloudinary Upload Error:', error);
+          return reject(new Error('Image upload failed.'));
+        }
+        resolve(result);
+      }
+    );
+    streamifier.createReadStream(buffer).pipe(uploadStream);
+  });
 };
 
 const userCtrl = {
@@ -24,53 +47,53 @@ const userCtrl = {
       password,
       role,
       phoneNumber,
-      // Student/Teacher specific
       firstName,
       lastName,
       university,
       department,
-      // Teacher specific
       designation,
-      // Admin specific
       fullName,
     } = req.body;
 
     console.log("Registration Request Body:", req.body);
+    console.log("File received:", req.file ? req.file.originalname : 'No file uploaded');
 
-    //! Basic Validations (Common fields)
+    //! Basic Validations
     validateFields({ username, email, password, role, phoneNumber });
 
-    //! check if user already exists (by email or username)
-    // Use the base User model for checking existence across all roles
+    //! Check if user already exists
     const existingUser = await User.findOne({ $or: [{ email }, { username }] });
     if (existingUser) {
-        res.status(409); // Conflict
-        throw new Error(
-            existingUser.email === email
-            ? "Email already exists"
-            : "Username already exists"
-        );
+      res.status(409); // Conflict
+      throw new Error(
+        existingUser.email === email
+          ? "Email already exists"
+          : "Username already exists"
+      );
     }
 
-    //! Hash the user password
+    //! Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    //! Prepare data and create user based on role
-    let userCreated;
+    //! Prepare common data
     const commonData = {
       username,
       email,
       password: hashedPassword,
       phoneNumber,
-      role, // Ensure role is passed for discriminator key
+      role,
     };
 
+    let userCreated;
+    let cloudinaryResult = null;
+
+    // Start user creation (will need user._id for Cloudinary and UserImage)
     try {
       switch (role) {
         case 'Student':
           validateFields({ firstName, lastName, university, department });
-          userCreated = await Student.create({
+          userCreated = new Student({
             ...commonData,
             firstName,
             lastName,
@@ -86,7 +109,7 @@ const userCtrl = {
             department,
             designation,
           });
-          userCreated = await Teacher.create({
+          userCreated = new Teacher({
             ...commonData,
             firstName,
             lastName,
@@ -97,7 +120,7 @@ const userCtrl = {
           break;
         case 'Admin':
           validateFields({ fullName });
-          userCreated = await Admin.create({
+          userCreated = new Admin({
             ...commonData,
             fullName,
           });
@@ -106,24 +129,78 @@ const userCtrl = {
           res.status(400); // Bad Request
           throw new Error("Invalid role specified");
       }
+
+      // --- Image Upload Logic --- 
+      if (req.file) {
+          console.log("Uploading image to Cloudinary...");
+          try {
+              // Use a temporary ID or username if needed for folder structure before user is saved
+              // Or upload after saving user initially
+              // Here, we upload first, assuming it's okay if it fails before user save
+              cloudinaryResult = await uploadToCloudinary(req.file.buffer, 'user_profile_images', userCreated._id); // Pass user ID
+              console.log("Cloudinary Upload Success:", cloudinaryResult.public_id);
+          } catch (uploadError) {
+              console.error("Cloudinary upload failed before saving user:", uploadError);
+              // Decide how to handle: proceed without image, or fail registration?
+              // For now, let's fail the registration if image upload fails
+              res.status(500);
+              throw new Error("Failed to upload profile image.");
+          }
+      }
+      
+      // Save the user document
+      await userCreated.save();
+      console.log("User document saved:", userCreated._id);
+
+      // --- Save Image Reference AFTER User Saved --- 
+      if (userCreated && cloudinaryResult) {
+          console.log(`Saving image reference for user ${userCreated._id}`);
+          const newUserImage = new UserImage({
+              user: userCreated._id,
+              imageUrl: cloudinaryResult.secure_url,
+              publicId: cloudinaryResult.public_id,
+          });
+          await newUserImage.save();
+          console.log("UserImage document saved:", newUserImage._id);
+      }
+
     } catch (error) {
-        // Catch validation errors from Mongoose or our helper
-        // Ensure a 400 status code for client-side errors
-        if (!res.statusCode || res.statusCode < 400 || res.statusCode >= 500) {
-             res.status(400);
+        console.error("Error during registration process:", error);
+
+        // Attempt cleanup: If user doc exists but image ref failed, or if image upload succeeded but user save failed
+        if (cloudinaryResult && (!userCreated || !(await User.findById(userCreated._id)))) {
+            console.warn(`User save failed after image upload. Deleting image: ${cloudinaryResult.public_id}`);
+            try {
+                await cloudinary.uploader.destroy(cloudinaryResult.public_id);
+                console.log(`Cloudinary image ${cloudinaryResult.public_id} deleted.`);
+            } catch (deleteError) {
+                console.error(`Failed to delete Cloudinary image ${cloudinaryResult.public_id}:`, deleteError);
+                // Log this error, but don't overwrite the original error response
+            }
         }
-        throw new Error(error.message || "Failed to create user due to invalid input.");
+        
+        // Handle Mongoose validation errors or other specific errors
+        if (error.name === 'ValidationError') {
+            res.status(400);
+        } else if (!res.statusCode || res.statusCode < 400) {
+            // Ensure a server error status if not already set
+            res.status(500);
+        }
+        // Rethrow the original error message or a generic one
+        throw new Error(error.message || "Registration failed due to an unexpected error.");
     }
 
-    //! Construct response (excluding sensitive info)
-    const responseData = userCreated.toObject(); 
-    delete responseData.password; 
-    delete responseData.__v; 
-    // We keep _id which is the user's ID
+    //! Construct response
+    const responseData = userCreated.toObject();
+    delete responseData.password;
+    delete responseData.__v;
+    if (cloudinaryResult) {
+      responseData.profileImageUrl = cloudinaryResult.secure_url; // Add image URL to response
+    }
 
     //!Send the response
-    console.log("User Created:", responseData);
-    res.status(201).json(responseData); // 201 Created status
+    console.log("User Registration Successful:", responseData);
+    res.status(201).json(responseData);
   }),
 
   //!Login
@@ -133,25 +210,25 @@ const userCtrl = {
     //! Basic Validations
     validateFields({ email, password });
 
-    //!Check if user email exists using the base User model
-    // Populate necessary fields based on role if needed, but not strictly necessary for login
+    //!Check if user email exists
     const user = await User.findOne({ email }); 
     console.log("Login attempt for user:", user?.email);
     if (!user) {
-        res.status(401); // Unauthorized
-        throw new Error("Invalid credentials");
+        res.status(401); throw new Error("Invalid credentials");
     }
 
     //!Check if user password is valid
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-        res.status(401); // Unauthorized
-        throw new Error("Invalid credentials");
+        res.status(401); throw new Error("Invalid credentials");
     }
 
-    //! Generate the token (include id and role)
+    // Fetch profile image URL if it exists
+    const userImage = await UserImage.findOne({ user: user._id });
+
+    //! Generate the token
     const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-      expiresIn: "30d", // Token expiration time
+      expiresIn: "30d", 
     });
 
     //!Send the response
@@ -161,40 +238,42 @@ const userCtrl = {
       id: user._id,
       email: user.email,
       username: user.username,
-      role: user.role, // Crucial to include role for frontend logic
+      role: user.role,
+      profileImageUrl: userImage ? userImage.imageUrl : null // Include image URL in login response
     });
   }),
 
   //!Profile
   profile: asyncHandler(async (req, res) => {
-    // req.user should contain the user's ID extracted by the isAuth middleware
     if (!req.user) {
-        res.status(401); // Unauthorized
-        throw new Error("Not authorized, token failed or user ID not found in token");
+        res.status(401); throw new Error("Not authorized, token failed or user ID not found in token");
     }
     
-    // Find the user using the base User model. Mongoose handles returning
-    // the correct document with all discriminator fields automatically.
-    // Exclude the password field from the result.
+    // Find user and populate profile image
     const user = await User.findById(req.user).select("-password"); 
+    const userImage = await UserImage.findOne({ user: req.user });
 
     if (!user) {
-        res.status(404); // Not Found
-        throw new Error("User not found");
+        res.status(404); throw new Error("User not found");
     }
 
-    // Send the complete user profile based on their role
-    res.json({ user }); 
+    // Combine user data with image URL
+    const userProfile = user.toObject(); // Convert to plain object to add properties
+    userProfile.profileImageUrl = userImage ? userImage.imageUrl : null;
+
+    res.json({ user: userProfile }); 
   }),
 
+  // ...(updateProfile remains the same for now, can add image update later)
   updateProfile: asyncHandler(async (req, res) => {
+    // TODO: Add image upload logic here similar to register if needed
     try {
       if (!req.user) {
         res.status(401);
         throw new Error("Not authorized, token failed or user ID not found in token");
       }
   
-      const userId = req.user; // From JWT via middleware
+      const userId = req.user; 
       const {
         email, username, password,
         firstName, lastName, phoneNumber, university,
@@ -207,13 +286,11 @@ const userCtrl = {
         throw new Error("User not found");
       }
   
-      // ✅ Optional: Update password if provided
       if (password && password.trim() !== "") {
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(password, salt);
       }
   
-      // ✅ Only allow updates based on user role
       if (user.role === "Student" || user.role === "Teacher") {
         if (firstName) user.firstName = firstName;
         if (lastName) user.lastName = lastName;
@@ -231,22 +308,31 @@ const userCtrl = {
         if (phoneNumber) user.phoneNumber = phoneNumber;
       }
   
-      // ✅ Optional shared fields
       if (username) user.username = username;
       if (email) user.email = email;
   
       await user.save();
   
+      // Fetch updated user data along with image url
       const updatedUser = await User.findById(userId).select("-password");
-  
+      const userImage = await UserImage.findOne({ user: userId });
+      const userProfile = updatedUser.toObject();
+      userProfile.profileImageUrl = userImage ? userImage.imageUrl : null;
+
       res.status(200).json({
         message: "Profile updated successfully",
-        user: updatedUser,
+        user: userProfile, // Send updated profile with image URL
       });
     } catch (error) {
       console.error("Update profile error:", error.message);
-      res.status(500).json({ message: "Server error" });
+      // Check for specific errors like duplicate key if username/email changed
+      if (error.code === 11000) { // MongoDB duplicate key error
+          res.status(409).json({ message: "Email or username already exists." });
+      } else {
+          res.status(500).json({ message: error.message || "Server error during profile update" });
+      }
     }
-  }),  
+  }),
+
 };
 module.exports = userCtrl;
