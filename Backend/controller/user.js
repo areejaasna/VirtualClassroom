@@ -3,7 +3,7 @@ const jwt = require("jsonwebtoken");
 const asyncHandler = require("express-async-handler");
 // Import the destructured models from User.js
 const { User, Student, Teacher, Admin } = require("../model/User");
-require('dotenv').config();
+//require('dotenv').config();
 
 // Helper function for validation
 const validateFields = (fields) => {
@@ -197,7 +197,7 @@ const userCtrl = {
       const userId = req.user; // From JWT via middleware
       const {
         email, username, password,
-        firstName, lastName, phoneNumber, collegeOrUniversity,
+        firstName, lastName, phoneNumber, university,
         department, designation, fullName,
       } = req.body;
   
@@ -217,8 +217,8 @@ const userCtrl = {
       if (user.role === "Student" || user.role === "Teacher") {
         if (firstName) user.firstName = firstName;
         if (lastName) user.lastName = lastName;
-        if (phoneNumber) user.phone = phoneNumber;
-        if (collegeOrUniversity) user.college = collegeOrUniversity;
+        if (phoneNumber) user.phoneNumber = phoneNumber;
+        if (university) user.university = university;
       }
   
       if (user.role === "Teacher") {
@@ -228,7 +228,7 @@ const userCtrl = {
   
       if (user.role === "Admin") {
         if (fullName) user.fullName = fullName;
-        if (phoneNumber) user.phone = phoneNumber;
+        if (phoneNumber) user.phoneNumber = phoneNumber;
       }
   
       // ✅ Optional shared fields
