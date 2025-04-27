@@ -17,10 +17,6 @@ const ConferenceRoomSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
-    dailyRoomUrl: { // Added field for Daily.co room URL
-      type: String,
-      required: false, // Not required initially
-    },
     createdAt: {
       type: Date,
       default: Date.now,
