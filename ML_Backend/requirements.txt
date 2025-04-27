@@ -1,3 +1,8 @@
 opencv-python
 ultralytics
 tensorflow
+google-generativeai
+pypdf
+scikit-learn
+Flask
+chromadb
