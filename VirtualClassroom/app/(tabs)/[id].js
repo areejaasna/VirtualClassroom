@@ -49,7 +49,7 @@ export default function Room() {
     peerConnection.current.ontrack = (event) => {
       console.log("ontrack", event);
       remoteVideo.current.srcObject = event.streams[0];
-    });
+    };
   };
 
   if (!roomId) {
