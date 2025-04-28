@@ -6,7 +6,7 @@ const dotenv = require("dotenv");
 const socketIo = require("socket.io");
 const router = require("./routes/users");
 const conferenceRouter = require("./routes/conferenceRouter");
-const { initializeSocket } = require("./controller/conferenceController");
+// const { initializeSocket } = require("./controller/conferenceController"); // Removed
 const errorHandler = require("./middlewares/errorHandler");
 
 dotenv.config();
@@ -30,7 +30,7 @@ app.use("/api/users", router);
 app.use("/api/conference", conferenceRouter);
 
 //! Initialize Socket.io
-initializeSocket(io);
+// initializeSocket(io); // Removed
 
 //! Error Handler Middleware
 app.use(errorHandler);
