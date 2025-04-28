@@ -9,8 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "@daily-co/react-native-daily-js": "^0.75.0",
-    "@daily-co/react-native-webrtc": "^118.0.3-daily.2",
+    "@100mslive/react-native-hms": "^1.11.0",
     "@react-native-async-storage/async-storage": "^1.23.1",
     "@reduxjs/toolkit": "^2.2.5",
     "@tanstack/react-query": "^5.37.1",
