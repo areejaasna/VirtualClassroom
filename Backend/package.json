@@ -10,7 +10,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@100mslive/server-sdk": "^0.3.0",
     "authentication-api": "file:",
     "axios": "^1.9.0",
     "bcryptjs": "^2.4.3",
