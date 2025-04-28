@@ -5,7 +5,8 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const socketIo = require("socket.io");
 const router = require("./routes/users");
-const conferenceRouter = require("./routes/conferenceRouter");
+// const conferenceRouter = require("./routes/conferenceRouter"); // Removed
+const livepeerConferenceRouter = require("./routes/livepeerConferenceRouter"); // Added Livepeer conference router
 // const { initializeSocket } = require("./controller/conferenceController"); // Removed
 const errorHandler = require("./middlewares/errorHandler");
 
@@ -27,7 +28,8 @@ app.use(express.json()); // Parse JSON request body
 
 //! Routes
 app.use("/api/users", router);
-app.use("/api/conference", conferenceRouter);
+// app.use("/api/conference", conferenceRouter); // Removed conference router usage
+app.use("/api/livepeer-conference", livepeerConferenceRouter); // Use Livepeer conference router
 
 //! Initialize Socket.io
 // initializeSocket(io); // Removed
